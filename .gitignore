@@ -79,10 +79,6 @@ dmypy.json
 *.log
 *.sqlite3
 
-# Coverage
-.coverage
-coverage.xml
-
 # Docker
 docker-compose.override.yml
 *.dockerfile

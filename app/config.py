@@ -47,9 +47,9 @@ class Settings(BaseSettings):
         mode="before",
     )
     def _assemble_database_url(
-            cls,
-            v: Optional[str],
-            info: ValidationInfo,
+        cls,
+        v: Optional[str],
+        info: ValidationInfo,
     ) -> str:
         if v is not None:
             return v
@@ -65,9 +65,9 @@ class Settings(BaseSettings):
     @classmethod
     @field_validator("broker_url", mode="before")
     def _assemble_broker_url(
-            cls,
-            v: Optional[str],
-            info: ValidationInfo,
+        cls,
+        v: Optional[str],
+        info: ValidationInfo,
     ) -> str:
         if v is not None:
             return v
@@ -80,9 +80,9 @@ class Settings(BaseSettings):
         mode="before",
     )
     def _assemble_result_backend(
-            cls,
-            v: Optional[str],
-            info: ValidationInfo,
+        cls,
+        v: Optional[str],
+        info: ValidationInfo,
     ) -> str:
         if v is not None:
             return v
