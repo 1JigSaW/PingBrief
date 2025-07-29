@@ -1,0 +1,26 @@
+# app/admin.py
+
+from sqladmin import Admin, ModelView
+from fastapi import FastAPI
+from app.db.models import Source, User
+from app.db.session import engine
+
+class SourceAdmin(ModelView, model=Source):
+    column_list = [Source.id, Source.name, Source.url, Source.is_active]
+    column_searchable_list = [Source.name]
+
+class UserAdmin(ModelView, model=User):
+    column_list = [User.id, User.username, User.is_active]
+
+async def init_app(app: FastAPI):
+    sync_engine = engine.sync_engine
+
+    admin = Admin(
+        app=app,
+        engine=sync_engine,
+        title="PingBrief Admin",
+    )
+
+    # Регистрируем классы, а не инстансы!
+    admin.add_view(SourceAdmin)
+    admin.add_view(UserAdmin)

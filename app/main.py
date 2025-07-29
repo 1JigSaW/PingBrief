@@ -5,13 +5,12 @@ import structlog
 
 from .config import get_settings
 from .logging_config import configure_logging
-
-from .api.v1.routers.users import router as users_router
 from .api.v1.routers import routers
+from .api.v1.routers.users import router as users_router
+from .admin import init_app
 
 configure_logging()
 log = structlog.get_logger()
-
 settings = get_settings()
 
 app = FastAPI(
@@ -29,20 +28,18 @@ app = FastAPI(
     ],
 )
 
-log.info(
-    "app_startup",
-    msg="Starting application",
-    host="0.0.0.0",
-    port=8000,
-)
+log.info("app_startup", msg="Starting application", host="0.0.0.0", port=8000)
 
+# роутеры
 for router in routers:
     app.include_router(router, prefix=settings.api_v1_str)
-
 app.include_router(users_router, prefix=settings.api_v1_str)
-
 
 @app.get("/health", tags=["health"])
 def health():
     log.info("health_check", status="ok")
     return {"status": "ok"}
+
+@app.on_event("startup")
+async def on_startup():
+    await init_app(app)
