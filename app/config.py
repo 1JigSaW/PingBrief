@@ -1,94 +1,95 @@
 from functools import lru_cache
 from typing import List, Optional
 
-from pydantic import AnyUrl, BaseSettings, Field, PostgresDsn, validator
+from pydantic import AnyUrl, Field, PostgresDsn, ValidationInfo, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """App settings loaded from .env or the OS environment."""
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+    )
 
-    app_env: str = Field("local", env="APP_ENV")
-    api_v1_str: str = Field("/api/v1", env="API_V1_STR")
-    secret_key: str = Field(..., env="SECRET_KEY")
-    debug: bool = Field(False, env="DEBUG")
+    app_env: str
+    api_v1_str: str
+    secret_key: str
+    debug: bool
 
-    # ------------------------------------------------------------------
-    # Database (PostgreSQL via asyncpg)
-    # ------------------------------------------------------------------
-    postgres_host: str = Field("db", env="POSTGRES_HOST")
-    postgres_port: int = Field(5432, env="POSTGRES_PORT")
-    postgres_db: str = Field("pingbrief", env="POSTGRES_DB")
-    postgres_user: str = Field("pingbrief", env="POSTGRES_USER")
-    postgres_password: str = Field("pingbrief", env="POSTGRES_PASSWORD")
-    database_url: Optional[PostgresDsn | str] = Field(None, env="DATABASE_URL")
+    postgres_host: str
+    postgres_port: int
+    postgres_db: str
+    postgres_user: str
+    postgres_password: str
+    database_url: Optional[PostgresDsn | str]
 
-    # ------------------------------------------------------------------
-    # Redis (broker / cache)
-    # ------------------------------------------------------------------
-    redis_host: str = Field("redis", env="REDIS_HOST")
-    redis_port: int = Field(6379, env="REDIS_PORT")
+    redis_host: str
+    redis_port: int
 
-    # ------------------------------------------------------------------
-    # OpenAI / LLM
-    # ------------------------------------------------------------------
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY")
-    openai_model: str = Field("gpt-4o-mini", env="OPENAI_MODEL")
+    openai_api_key: str
+    openai_model: str
 
-    # ------------------------------------------------------------------
-    # External APIs
-    # ------------------------------------------------------------------
-    newsapi_key: Optional[str] = Field(None, env="NEWSAPI_KEY")
+    newsapi_key: Optional[str]
 
-    # ------------------------------------------------------------------
-    # Telegram
-    # ------------------------------------------------------------------
-    telegram_bot_token: str = Field(..., env="TELEGRAM_BOT_TOKEN")
-    webhook_url: Optional[AnyUrl] = Field(None, env="WEBHOOK_URL")
+    telegram_bot_token: str
+    webhook_url: Optional[AnyUrl] = Field(alias="TELEGRAM_WEBHOOK_URL")
 
-    # ------------------------------------------------------------------
-    # Celery
-    # ------------------------------------------------------------------
-    broker_url: Optional[str] = Field(None, env="CELERY_BROKER_URL")
-    result_backend: Optional[str] = Field(None, env="CELERY_RESULT_BACKEND")
-    beat_schedule: int = Field(15, env="FEED_FETCH_INTERVAL_MIN")  # minutes
+    broker_url: Optional[str]
+    result_backend: Optional[str]
+    beat_schedule: int
 
-    # ------------------------------------------------------------------
-    # Misc
-    # ------------------------------------------------------------------
-    allowed_hosts: List[str] = Field(["*"], env="ALLOWED_HOSTS")
+    allowed_hosts: List[str] = Field(default_factory=lambda: ["*"])
 
-    class Config:
-        case_sensitive = True
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-
-    # ------------------------------------------------------------------
-    # Validators
-    # ------------------------------------------------------------------
-    @validator("database_url", pre=True)
-    def assemble_db_uri(cls, v: Optional[str], values: dict[str, str]) -> str:
-        """Create DATABASE_URL from individual parts if not provided."""
-        if v:
+    @classmethod
+    @field_validator(
+        "database_url",
+        mode="before",
+    )
+    def _assemble_database_url(
+            cls,
+            v: Optional[str],
+            info: ValidationInfo,
+    ) -> str:
+        if v is not None:
             return v
+        d = info.data
         return (
-            f"postgresql+asyncpg://{values['postgres_user']}:{values['postgres_password']}@"
-            f"{values['postgres_host']}:{values['postgres_port']}/{values['postgres_db']}"
+            f"postgresql+asyncpg://{d['postgres_user']}:"
+            f"{d['postgres_password']}@"
+            f"{d['postgres_host']}:"
+            f"{d['postgres_port']}/"
+            f"{d['postgres_db']}"
         )
 
-    @validator("broker_url", pre=True, always=True)
-    def default_broker(cls, v: Optional[str], values: dict[str, str]) -> str:
-        if v:
+    @classmethod
+    @field_validator("broker_url", mode="before")
+    def _assemble_broker_url(
+            cls,
+            v: Optional[str],
+            info: ValidationInfo,
+    ) -> str:
+        if v is not None:
             return v
-        return f"redis://{values['redis_host']}:{values['redis_port']}/0"
+        d = info.data
+        return f"redis://{d['redis_host']}:{d['redis_port']}/0"
 
-    @validator("result_backend", pre=True, always=True)
-    def default_backend(cls, v: Optional[str], values: dict[str, str]) -> str:
-        if v:
+    @classmethod
+    @field_validator(
+        "result_backend",
+        mode="before",
+    )
+    def _assemble_result_backend(
+            cls,
+            v: Optional[str],
+            info: ValidationInfo,
+    ) -> str:
+        if v is not None:
             return v
-        return f"redis://{values['redis_host']}:{values['redis_port']}/1"
+        d = info.data
+        return f"redis://{d['redis_host']}:{d['redis_port']}/1"
 
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Return a cached Settings object for the lifetime of the process."""
     return Settings()
