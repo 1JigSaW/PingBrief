@@ -42,6 +42,9 @@ class Settings(BaseSettings):
 
     allowed_hosts: List[str] = Field(default_factory=lambda: ["*"])
 
+    hackernews_api_url: AnyUrl = "https://hacker-news.firebaseio.com/v0"
+    hackernews_web_url: AnyUrl = "https://news.ycombinator.com/"
+
     @field_validator("database_url", mode="before")
     def _assemble_database_url(cls, v, info):
         if v is not None:

@@ -1,5 +1,3 @@
-# app/admin.py
-
 from sqladmin import Admin, ModelView
 from fastapi import FastAPI
 from app.db.models import Source, User
@@ -21,6 +19,5 @@ async def init_app(app: FastAPI):
         title="PingBrief Admin",
     )
 
-    # Регистрируем классы, а не инстансы!
     admin.add_view(SourceAdmin)
     admin.add_view(UserAdmin)

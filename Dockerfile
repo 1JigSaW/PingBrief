@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-COPY scripts/run_prod.sh /app/run_prod.sh
+COPY run_prod.sh /app/run_prod.sh
 RUN chmod +x /app/run_prod.sh
 
 ENTRYPOINT ["/app/run_prod.sh"]

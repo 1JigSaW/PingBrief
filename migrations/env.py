@@ -1,6 +1,9 @@
 import os
 import sys
 from logging.config import fileConfig
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
@@ -11,6 +14,11 @@ from sqlalchemy import engine_from_config, pool
 
 # load .env if needed, then:
 config = context.config
+
+project_root = Path(__file__).resolve().parent.parent
+load_dotenv(project_root / ".env")
+
+
 
 # push DATABASE_URL from environment
 database_url = os.getenv("DATABASE_URL")

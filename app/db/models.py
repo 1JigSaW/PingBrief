@@ -249,3 +249,39 @@ class Digest(Base, TimestampMixin):
     user: Mapped["User"] = relationship(
         back_populates="digests",
     )
+
+class NewsItem(Base, TimestampMixin):
+    __tablename__ = "news_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("sources.id"),
+        nullable=False,
+    )
+    external_id: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        comment="id news form api",
+    )
+    title: Mapped[str] = mapped_column(
+        String(256),
+        nullable=False,
+    )
+    url: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+    )
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        comment="Time to schedule",
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+    )
