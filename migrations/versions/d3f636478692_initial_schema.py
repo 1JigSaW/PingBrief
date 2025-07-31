@@ -1,8 +1,8 @@
-"""create initial tables
+"""initial schema
 
-Revision ID: dbe18c4fbc2e
+Revision ID: d3f636478692
 Revises: 
-Create Date: 2025-07-29 23:55:51.456935
+Create Date: 2025-07-31 19:48:15.285192
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'dbe18c4fbc2e'
+revision: str = 'd3f636478692'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -46,6 +46,19 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
     op.create_index(op.f('ix_users_telegram_id'), 'users', ['telegram_id'], unique=True)
+    op.create_table('news_items',
+    sa.Column('id', sa.UUID(), nullable=False),
+    sa.Column('source_id', sa.UUID(), nullable=False),
+    sa.Column('external_id', sa.String(), nullable=False, comment='id news form api'),
+    sa.Column('title', sa.String(length=256), nullable=False),
+    sa.Column('url', sa.String(length=512), nullable=False),
+    sa.Column('fetched_at', sa.DateTime(), nullable=False, comment='Time to schedule'),
+    sa.Column('is_active', sa.Boolean(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['source_id'], ['sources.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('subscriptions',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('user_id', sa.UUID(), nullable=False),
@@ -86,6 +99,7 @@ def downgrade() -> None:
     op.drop_table('digests')
     op.drop_index(op.f('ix_subscriptions_id'), table_name='subscriptions')
     op.drop_table('subscriptions')
+    op.drop_table('news_items')
     op.drop_index(op.f('ix_users_telegram_id'), table_name='users')
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_table('users')

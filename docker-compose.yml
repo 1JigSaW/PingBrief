@@ -1,7 +1,8 @@
-version: '3.8'
 services:
   postgres:
     image: postgres:16
+    ports:
+      - "5433:5432"
     restart: always
     env_file: .env
     environment:
@@ -9,7 +10,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
+      - DATABASE_URL=${DATABASE_URL}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,10 +23,14 @@ services:
     restart: always
 
   api:
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
     build: .
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
+      - DATABASE_URL=${DATABASE_URL}
     ports:
       - "8000:8000"
     depends_on:
@@ -40,7 +45,7 @@ services:
     build: .
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
+      - DATABASE_URL=${DATABASE_URL}
     depends_on:
       - redis
       - postgres
@@ -51,7 +56,7 @@ services:
     build: .
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
+      - DATABASE_URL=${DATABASE_URL}
     depends_on:
       - redis
       - postgres
@@ -63,7 +68,7 @@ services:
     command: ["python", "-u", "bot/handler.py"]
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
+      - DATABASE_URL=${DATABASE_URL}
     depends_on:
       api:
         condition: service_started

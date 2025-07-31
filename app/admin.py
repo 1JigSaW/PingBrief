@@ -11,11 +11,9 @@ class UserAdmin(ModelView, model=User):
     column_list = [User.id, User.username, User.is_active]
 
 async def init_app(app: FastAPI):
-    sync_engine = engine.sync_engine
-
     admin = Admin(
         app=app,
-        engine=sync_engine,
+        engine=engine,
         title="PingBrief Admin",
     )
 

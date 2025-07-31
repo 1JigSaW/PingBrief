@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     postgres_user: str
     postgres_password: str
     database_url: Optional[PostgresDsn | str]
+    database_url_sync: str
 
     redis_host: str
     redis_port: int
