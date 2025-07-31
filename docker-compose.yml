@@ -68,7 +68,7 @@ services:
     env_file: .env
     volumes:
       - ./:/app
-    command: [ "python", "-u", "-m", "bot.handler" ]
+    command: [ "python", "-u", "-m", "bot.main" ]
     entrypoint: [ ]
     depends_on:
       - redis

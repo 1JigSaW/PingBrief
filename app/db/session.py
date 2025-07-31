@@ -16,6 +16,9 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
 )
 
+def get_sync_db():
+    return SessionLocalSync()
+
 @asynccontextmanager
 async def get_db():
     """Provide a transactional asynchronous session for FastAPI endpoints"""
