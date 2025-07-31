@@ -7,7 +7,6 @@ from app.config import get_settings
 
 settings = get_settings()
 
-# Asynchronous engine and session for FastAPI
 async_engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,

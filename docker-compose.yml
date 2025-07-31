@@ -65,13 +65,14 @@ services:
 
   bot:
     build: .
-    command: ["python", "-u", "bot/handler.py"]
     env_file: .env
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - ./:/app
+    command: [ "python", "-u", "-m", "bot.handler" ]
+    entrypoint: [ ]
     depends_on:
-      api:
-        condition: service_started
+      - redis
+      - postgres
 
 volumes:
   postgres_data:

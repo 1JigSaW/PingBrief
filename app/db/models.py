@@ -127,6 +127,23 @@ class Source(Base, TimestampMixin):
         cascade="all, delete-orphan",
     )
 
+class Language(Base, TimestampMixin):
+    __tablename__ = "languages"
+
+    code: Mapped[str] = mapped_column(
+        String(8),
+        primary_key=True
+    )
+    name: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False
+    )
+
 
 class Subscription(Base, TimestampMixin):
     __tablename__ = "subscriptions"
@@ -150,12 +167,6 @@ class Subscription(Base, TimestampMixin):
         nullable=False,
     )
 
-    language: Mapped[str] = mapped_column(
-        String(8),
-        nullable=False,
-        comment="Language code for summaries (ISO 639-1)",
-    )
-
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
@@ -175,6 +186,22 @@ class Subscription(Base, TimestampMixin):
         back_populates="subscription",
         cascade="all, delete-orphan",
     )
+
+    language: Mapped[str] = mapped_column(
+        String(8),
+        ForeignKey("languages.code"),
+        nullable=False
+    )
+
+    language_rel: Mapped["Language"] = relationship(
+        back_populates="subscriptions"
+    )
+
+Language.subscriptions = relationship(
+    "Subscription",
+    back_populates="language_rel",
+    cascade="all, delete-orphan"
+)
 
 
 class DigestStatus(str, Enum):
