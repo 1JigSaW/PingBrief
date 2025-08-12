@@ -11,11 +11,11 @@ bot = Bot(
 )
 dp = Dispatcher(storage=MemoryStorage())
 
-from bot.handlers import start, sources, languages
+from bot.handlers import start, sources, subscriptions
 
 dp.include_router(start.router)
 dp.include_router(sources.router)
-dp.include_router(languages.router)
+dp.include_router(subscriptions.router)
 
 if __name__ == "__main__":
     dp.run_polling(bot)

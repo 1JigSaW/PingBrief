@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db.models import Source, NewsItem
+from app.services.extractors.content_extractor import ContentExtractor
 
 settings = get_settings()
 
@@ -14,6 +15,7 @@ class HackerNewsParser:
         self.db = db
         self.api = settings.hackernews_api_url
         self.web = settings.hackernews_web_url
+        self.content_extractor = ContentExtractor()
 
     def save_new_sync(
             self,
@@ -51,10 +53,16 @@ class HackerNewsParser:
             title = item.get("title", "")
             ts = datetime.fromtimestamp(item.get("time", 0))
 
+            # Extract content from web page
+            extracted_title, content = self.content_extractor.extract_content(url)
+            if not extracted_title:
+                extracted_title = title
+
             ni = NewsItem(
                 source_id=source.id, # type: ignore
                 external_id=sid_str,
-                title=title,
+                title=extracted_title,
+                content=content,
                 url=url,
                 fetched_at=ts,
                 is_active=True,

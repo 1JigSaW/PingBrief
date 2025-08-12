@@ -3,53 +3,143 @@ from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from uuid import UUID
 
-from app.db.models import User, Subscription, Language
+from app.db.models import User, Subscription, Language, Source
 from app.db.session import get_sync_db
+from bot.state import get_selection, pop_selection
+from bot.texts import SUBSCRIPTION_CREATED_TEXT
 
 router = Router()
-_selection: dict[int, set[UUID]] = {}
+
+TOP_LANGUAGES = [
+    "en",  # English
+    "ru",  # Russian
+    "es",  # Spanish
+    "fr",  # French
+    "de",  # German
+    "zh",  # Chinese
+    "ja",  # Japanese
+    "ko",  # Korean
+    "it",  # Italian
+    "pt",  # Portuguese
+    "ar",  # Arabic
+    "hi",  # Hindi
+    "tr",  # Turkish
+    "nl",  # Dutch
+    "sv",  # Swedish
+]
 
 async def build_languages_kb():
     db = get_sync_db()
     try:
-        langs = db.query(Language).filter_by().all()
+        langs = db.query(Language).filter(Language.code.in_(TOP_LANGUAGES)).all()
     finally:
         db.close()
     kb = InlineKeyboardBuilder()
     for lang in langs:
-        kb.button(text=lang.name, callback_data=f"lang:{lang.code}")
+        flag_emoji = get_flag_emoji(lang.code)
+        kb.button(text=f"{flag_emoji} {lang.name}", callback_data=f"lang:{lang.code}")
     kb.adjust(2)
     return kb.as_markup()
 
-@router.callback_query(lambda c: c.data and c.data.startswith("sources_done"))
-async def sources_done(cb: CallbackQuery):
-    kb = await build_languages_kb()
-    await cb.message.edit_text("Выберите язык для подписки:", reply_markup=kb)
-    await cb.answer()
+def get_flag_emoji(lang_code):
+    """Get flag emoji for language code"""
+    flag_map = {
+        "en": "🇺🇸", "ru": "🇷🇺", "es": "🇪🇸", "fr": "🇫🇷", "de": "🇩🇪",
+        "zh": "🇨🇳", "ja": "🇯🇵", "ko": "🇰🇷", "it": "🇮🇹", "pt": "🇵🇹",
+        "ar": "🇸🇦", "hi": "🇮🇳", "tr": "🇹🇷", "nl": "🇳🇱", "sv": "🇸🇪"
+    }
+    return flag_map.get(lang_code, "🌍")
 
 @router.callback_query(lambda c: c.data and c.data.startswith("lang:"))
 async def language_chosen(cb: CallbackQuery):
-    code = cb.data.split(":",1)[1]
+    code = cb.data.split(
+        ":",
+        1,
+    )[1]
+    chat = cb.from_user.id
+    sel = get_selection(chat)
+    
+    if len(sel) == 0:
+        await cb.answer("⚠️ Error: no sources selected", show_alert=True)
+        return
+    
     db = get_sync_db()
     try:
-        user = db.query(User).filter_by(telegram_id=str(cb.from_user.id)).one_or_none()
+        user = (
+            db.query(User)
+            .filter_by(
+                telegram_id=str(cb.from_user.id),
+            )
+            .one_or_none()
+        )
         if not user:
             user = User(telegram_id=str(cb.from_user.id), username=cb.from_user.username)
-            db.add(user); db.commit()
-        for src_id in _selection.pop(cb.from_user.id, []):
+            db.add(user)
+            db.flush()
+
+        first_source_id = next(iter(sel)) if sel else None
+        first_source = (
+            db.query(Source)
+            .filter(
+                Source.id == str(first_source_id),
+            )
+            .first()
+            if first_source_id
+            else None
+        )
+        sources_text = f"📰 <b>{first_source.name}</b>" if first_source else "Unknown source"
+
+        language = db.query(Language).filter(Language.code == code).first()
+        language_name = language.name if language else code
+        flag_emoji = get_flag_emoji(code)
+
+        existing_subs = (
+            db.query(Subscription)
+            .filter(
+                Subscription.user_id == user.id,
+                Subscription.is_active == True,
+            )
+            .all()
+        )
+        
+        if existing_subs:
+            for sub in existing_subs:
+                sub.is_active = False
+
+        if first_source_id:
             sub = Subscription(
                 user_id=user.id,
-                source_id=src_id,
+                source_id=first_source_id,
                 language=code,
                 is_active=True,
             )
             db.add(sub)
         db.commit()
+
+        pop_selection(chat)
+        
     finally:
         db.close()
 
-    await cb.message.edit_text(
-        f"Подписка на язык «{code}» создана. Ждите новостей!",
-        reply_markup=None
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text="⚙️ /settings",
+        callback_data="cmd_settings",
     )
+    kb.adjust(1)
+    
+    await cb.message.edit_text(
+        text=SUBSCRIPTION_CREATED_TEXT.format(
+            source=sources_text,
+            flag=flag_emoji,
+            language=language_name,
+        ),
+        reply_markup=kb.as_markup(),
+    )
+    await cb.answer()
+
+@router.callback_query(lambda c: c.data == "cmd_settings")
+async def cmd_settings_button(cb: CallbackQuery):
+    from bot.handlers.start import show_settings
+    await show_settings(cb.from_user.id, cb.message)
     await cb.answer()

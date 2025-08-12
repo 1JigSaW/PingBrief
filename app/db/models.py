@@ -299,6 +299,16 @@ class NewsItem(Base, TimestampMixin):
         String(256),
         nullable=False,
     )
+    content: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Full article content",
+    )
+    summary: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="LLM-generated summary",
+    )
     url: Mapped[str] = mapped_column(
         String(512),
         nullable=False,
