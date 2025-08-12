@@ -12,7 +12,7 @@ def build_help_keyboard() -> InlineKeyboardBuilder:
     builder = InlineKeyboardBuilder()
     builder.button(
         text="🚀 Get Started",
-        callback_data="start_new",
+        callback_data="cmd_start",
     )
     builder.button(
         text="⚙️ Settings",
@@ -55,8 +55,12 @@ def build_command_shortcuts_keyboard() -> InlineKeyboardBuilder:
 def build_settings_keyboard() -> InlineKeyboardBuilder:
     builder = InlineKeyboardBuilder()
     builder.button(
-        text="➕ Add new subscription",
-        callback_data="add_subscription",
+        text="📰 Change source",
+        callback_data="change_source",
+    )
+    builder.button(
+        text="🌍 Change language",
+        callback_data="change_language",
     )
     builder.button(
         text="🗑️ Remove subscription",
@@ -71,10 +75,6 @@ def build_start_keyboard() -> InlineKeyboardBuilder:
     builder.button(
         text="⚙️ Manage Subscriptions",
         callback_data="go_settings",
-    )
-    builder.button(
-        text="➕ Add New Subscription",
-        callback_data="start_new",
     )
     builder.adjust(1)
     return builder

@@ -6,7 +6,7 @@ from uuid import UUID
 from app.db.models import User, Subscription, Language, Source
 from app.db.session import get_sync_db
 from bot.state import get_selection, pop_selection
-from bot.texts import SUBSCRIPTION_CREATED_TEXT
+from bot.texts import SUBSCRIPTION_CREATED_TEXT, SUBSCRIPTION_UPDATED_TEXT
 
 router = Router()
 
@@ -58,11 +58,6 @@ async def language_chosen(cb: CallbackQuery):
     )[1]
     chat = cb.from_user.id
     sel = get_selection(chat)
-    
-    if len(sel) == 0:
-        await cb.answer("⚠️ Error: no sources selected", show_alert=True)
-        return
-    
     db = get_sync_db()
     try:
         user = (
@@ -87,6 +82,18 @@ async def language_chosen(cb: CallbackQuery):
             if first_source_id
             else None
         )
+        if not first_source:
+            current_sub = (
+                db.query(Subscription)
+                .filter(
+                    Subscription.user_id == user.id,
+                    Subscription.is_active == True,
+                )
+                .first()
+            )
+            if current_sub:
+                first_source = db.query(Source).filter(Source.id == str(current_sub.source_id)).first()
+                first_source_id = current_sub.source_id
         sources_text = f"📰 <b>{first_source.name}</b>" if first_source else "Unknown source"
 
         language = db.query(Language).filter(Language.code == code).first()
@@ -102,18 +109,23 @@ async def language_chosen(cb: CallbackQuery):
             .all()
         )
         
+        target_sub = None
         if existing_subs:
-            for sub in existing_subs:
-                sub.is_active = False
-
-        if first_source_id:
-            sub = Subscription(
+            target_sub = existing_subs[0]
+            if first_source_id is not None:
+                target_sub.source_id = first_source_id
+            target_sub.language = code
+        else:
+            if first_source_id is None:
+                await cb.answer("⚠️ Please select a source first", show_alert=True)
+                return
+            target_sub = Subscription(
                 user_id=user.id,
                 source_id=first_source_id,
                 language=code,
                 is_active=True,
             )
-            db.add(sub)
+            db.add(target_sub)
         db.commit()
 
         pop_selection(chat)
@@ -128,8 +140,9 @@ async def language_chosen(cb: CallbackQuery):
     )
     kb.adjust(1)
     
+    text_tpl = SUBSCRIPTION_UPDATED_TEXT if existing_subs else SUBSCRIPTION_CREATED_TEXT
     await cb.message.edit_text(
-        text=SUBSCRIPTION_CREATED_TEXT.format(
+        text=text_tpl.format(
             source=sources_text,
             flag=flag_emoji,
             language=language_name,

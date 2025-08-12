@@ -5,7 +5,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.db.models import User, Subscription
 from app.db.session import get_sync_db
-from bot.state import get_selection
+from bot.state import get_selection, set_source_selection_context, clear_source_selection_context
 from bot.keyboards.builders import (
     build_start_keyboard,
     build_help_keyboard,
@@ -21,7 +21,6 @@ from bot.texts import (
     NO_SUBSCRIPTIONS_TEXT,
     NO_ACTIVE_SUBSCRIPTIONS_TEXT,
     SETTINGS_HEADER_TEXT,
-    ADD_SUBSCRIPTION_HEADER_TEXT,
 )
 
 router = Router()
@@ -86,22 +85,21 @@ async def unknown_command(message: Message):
         reply_markup=kb,
     )
 
-@router.callback_query(lambda c: c.data == "start_new")
-async def start_new_subscription(cb: CallbackQuery):
+@router.callback_query(lambda c: c.data == "change_source")
+async def change_source(cb: CallbackQuery):
     chat = cb.from_user.id
     sel = get_selection(chat)
     sel.clear()
+    set_source_selection_context(chat, "settings")
 
     from bot.handlers.sources import build_sources_kb
-    kb = await build_sources_kb(set())
+    kb = await build_sources_kb(
+        selected=set(),
+        context="settings",
+    )
     await cb.message.edit_text(
-        "🚀 <b>Let's Get Started!</b>\n\n"
-        "📰 <b>Your personal news aggregator</b>\n\n"
-        "Choose the news sources that interest you:\n"
-        "• Click on sources to select/deselect\n"
-        "• Select at least one source to continue\n"
-        "• We'll send you fresh articles daily",
-        reply_markup=kb
+        text="📰 <b>Change Source</b>\n\nSelect a single source:",
+        reply_markup=kb,
     )
     await cb.answer()
 
@@ -193,16 +191,15 @@ async def show_settings(user_id: int, message_or_callback):
 async def cmd_settings(message: Message):
     await show_settings(message.from_user.id, message)
 
-@router.callback_query(lambda c: c.data == "add_subscription")
-async def add_subscription(cb: CallbackQuery):
-    chat = cb.from_user.id
-    sel = get_selection(chat)
+@router.callback_query(lambda c: c.data == "change_language")
+async def change_language(cb: CallbackQuery):
+    from bot.handlers.subscriptions import build_languages_kb
+    sel = get_selection(cb.from_user.id)
     sel.clear()
-    
-    from bot.handlers.sources import build_sources_kb
-    kb = await build_sources_kb(set())
+    clear_source_selection_context(cb.from_user.id)
+    kb = await build_languages_kb()
     await cb.message.edit_text(
-        text=ADD_SUBSCRIPTION_HEADER_TEXT,
+        text="🌍 <b>Change Language</b>\n\nSelect your preferred language:",
         reply_markup=kb,
     )
     await cb.answer()

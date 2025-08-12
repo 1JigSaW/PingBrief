@@ -111,5 +111,13 @@ REMOVED_SUBSCRIPTION_TEXT: Final[str] = (
 )
 
 
+SUBSCRIPTION_UPDATED_TEXT: Final[str] = (
+    "✅ <b>Subscription Updated</b>\n\n"
+    "📰 <b>Source:</b> {source}\n\n"
+    "🌍 <b>Language:</b> {flag} {language}\n\n"
+    "⚙️ You can manage your subscription below."
+)
+
+
 START_FLOW_HEADER_TEXT: Final[str] = WELCOME_NEW_USER_TEXT
 
