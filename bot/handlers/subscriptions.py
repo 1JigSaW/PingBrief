@@ -87,7 +87,8 @@ async def language_chosen(cb: CallbackQuery):
             .all()
         )
 
-        selected_source_ids = {UUID(str(s)) for s in sel}
+        # sel already contains UUIDs from bot.state
+        selected_source_ids = set(sel)
 
         if selected_source_ids:
             # Create or update subscriptions for all selected sources
@@ -117,7 +118,7 @@ async def language_chosen(cb: CallbackQuery):
         if selected_source_ids:
             selected_sources = (
                 db.query(Source)
-                .filter(Source.id.in_([str(s) for s in selected_source_ids]))
+                .filter(Source.id.in_(list(selected_source_ids)))
                 .all()
             )
         else:
@@ -138,7 +139,16 @@ async def language_chosen(cb: CallbackQuery):
     kb.adjust(1)
     
     # Determine template based on whether the user had any subscriptions before
-    text_tpl = SUBSCRIPTION_UPDATED_TEXT if user and user.subscriptions else SUBSCRIPTION_CREATED_TEXT
+    # If user had no subscriptions before this action, treat as created; else updated
+    had_subscriptions = False
+    try:
+        db = get_sync_db()
+        u = db.query(User).filter_by(telegram_id=str(cb.from_user.id)).one_or_none()
+        if u and u.subscriptions:
+            had_subscriptions = any(s.is_active for s in u.subscriptions)
+    finally:
+        db.close()
+    text_tpl = SUBSCRIPTION_UPDATED_TEXT if had_subscriptions else SUBSCRIPTION_CREATED_TEXT
     await cb.message.edit_text(
         text=text_tpl.format(
             sources=sources_text,

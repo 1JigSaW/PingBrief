@@ -63,7 +63,7 @@ async def sources_done(cb: CallbackQuery):
 
     db = get_sync_db()
     try:
-        selected_sources = db.query(Source).filter(Source.id.in_([str(s) for s in sel])).all()
+        selected_sources = db.query(Source).filter(Source.id.in_(list(sel))).all()
         sources_text = "\n".join([f"📰 <b>{src.name}</b>" for src in selected_sources])
     finally:
         db.close()

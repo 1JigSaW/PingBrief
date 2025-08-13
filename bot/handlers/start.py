@@ -60,6 +60,11 @@ async def cmd_start(message: Message):
             db.add(user)
             db.commit()
 
+        # Ensure clean onboarding state
+        sel = get_selection(message.from_user.id)
+        sel.clear()
+        clear_source_selection_context(message.from_user.id)
+
         from bot.handlers.sources import build_sources_kb
         kb = await build_sources_kb(set())
         await message.answer(
@@ -223,16 +228,17 @@ async def remove_subscriptions(cb: CallbackQuery):
             for sub in user.subscriptions:
                 sub.is_active = False
             db.commit()
-        
-        kb = InlineKeyboardBuilder()
-        kb.button(text="🚀 /start", callback_data="cmd_start")
-        kb.adjust(1)
-        
+
+        # Immediately start onboarding: select sources again
+        # Reset selection and context to onboarding
+        sel = get_selection(cb.from_user.id)
+        sel.clear()
+        clear_source_selection_context(cb.from_user.id)
+        from bot.handlers.sources import build_sources_kb
+        kb = await build_sources_kb(set())
         await cb.message.edit_text(
-            "🗑️ <b>Subscription removed</b>\n\n"
-            "✅ Your subscription has been deactivated.\n\n"
-            "Click the button below to create a new subscription!",
-            reply_markup=kb.as_markup()
+            text=WELCOME_NEW_USER_TEXT,
+            reply_markup=kb,
         )
     finally:
         db.close()
