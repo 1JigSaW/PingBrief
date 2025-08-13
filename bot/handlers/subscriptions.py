@@ -72,35 +72,13 @@ async def language_chosen(cb: CallbackQuery):
             db.add(user)
             db.flush()
 
-        first_source_id = next(iter(sel)) if sel else None
-        first_source = (
-            db.query(Source)
-            .filter(
-                Source.id == str(first_source_id),
-            )
-            .first()
-            if first_source_id
-            else None
-        )
-        if not first_source:
-            current_sub = (
-                db.query(Subscription)
-                .filter(
-                    Subscription.user_id == user.id,
-                    Subscription.is_active == True,
-                )
-                .first()
-            )
-            if current_sub:
-                first_source = db.query(Source).filter(Source.id == str(current_sub.source_id)).first()
-                first_source_id = current_sub.source_id
-        sources_text = f"📰 <b>{first_source.name}</b>" if first_source else "Unknown source"
-
+        # Resolve language entity
         language = db.query(Language).filter(Language.code == code).first()
         language_name = language.name if language else code
         flag_emoji = get_flag_emoji(code)
 
-        existing_subs = (
+        # Currently active subscriptions
+        active_subs = (
             db.query(Subscription)
             .filter(
                 Subscription.user_id == user.id,
@@ -108,25 +86,44 @@ async def language_chosen(cb: CallbackQuery):
             )
             .all()
         )
-        
-        target_sub = None
-        if existing_subs:
-            target_sub = existing_subs[0]
-            if first_source_id is not None:
-                target_sub.source_id = first_source_id
-            target_sub.language = code
+
+        selected_source_ids = {UUID(str(s)) for s in sel}
+
+        if selected_source_ids:
+            # Create or update subscriptions for all selected sources
+            existing_by_source = {sub.source_id: sub for sub in active_subs}
+            for src_id in selected_source_ids:
+                sub = existing_by_source.get(src_id)
+                if sub:
+                    sub.language = code
+                    sub.is_active = True
+                else:
+                    db.add(
+                        Subscription(
+                            user_id=user.id,
+                            source_id=src_id,
+                            language=code,
+                            is_active=True,
+                        )
+                    )
+            db.commit()
         else:
-            if first_source_id is None:
-                await cb.answer("⚠️ Please select a source first", show_alert=True)
-                return
-            target_sub = Subscription(
-                user_id=user.id,
-                source_id=first_source_id,
-                language=code,
-                is_active=True,
+            # No selected sources (e.g., language change from settings): update all active to new language
+            for sub in active_subs:
+                sub.language = code
+            db.commit()
+
+        # Prepare message
+        if selected_source_ids:
+            selected_sources = (
+                db.query(Source)
+                .filter(Source.id.in_([str(s) for s in selected_source_ids]))
+                .all()
             )
-            db.add(target_sub)
-        db.commit()
+        else:
+            selected_sources = [sub.source for sub in active_subs]
+
+        sources_text = "\n".join([f"📰 <b>{src.name}</b>" for src in selected_sources]) if selected_sources else "Unknown source(s)"
 
         pop_selection(chat)
         
@@ -140,10 +137,11 @@ async def language_chosen(cb: CallbackQuery):
     )
     kb.adjust(1)
     
-    text_tpl = SUBSCRIPTION_UPDATED_TEXT if existing_subs else SUBSCRIPTION_CREATED_TEXT
+    # Determine template based on whether the user had any subscriptions before
+    text_tpl = SUBSCRIPTION_UPDATED_TEXT if user and user.subscriptions else SUBSCRIPTION_CREATED_TEXT
     await cb.message.edit_text(
         text=text_tpl.format(
-            source=sources_text,
+            sources=sources_text,
             flag=flag_emoji,
             language=language_name,
         ),

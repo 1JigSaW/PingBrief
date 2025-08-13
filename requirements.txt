@@ -71,3 +71,4 @@ pycountry~=24.6.1
 newspaper3k==0.2.8
 openai==0.28.1
 lxml[html_clean]
+trafilatura==1.7.0

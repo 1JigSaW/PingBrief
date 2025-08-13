@@ -55,7 +55,7 @@ def build_command_shortcuts_keyboard() -> InlineKeyboardBuilder:
 def build_settings_keyboard() -> InlineKeyboardBuilder:
     builder = InlineKeyboardBuilder()
     builder.button(
-        text="📰 Change source",
+        text="📰 Change sources",
         callback_data="change_source",
     )
     builder.button(

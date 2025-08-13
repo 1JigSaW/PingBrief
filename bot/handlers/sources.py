@@ -42,7 +42,6 @@ async def toggle_src(cb: CallbackQuery):
     if src_id in sel:
         sel.remove(src_id)
     else:
-        sel.clear()
         sel.add(src_id)
     context = get_source_selection_context(chat)
     kb = await build_sources_kb(sel, context=context)
@@ -120,19 +119,53 @@ async def sources_apply(cb: CallbackQuery):
         if not user:
             await cb.answer("User not found", show_alert=True)
             return
-        sub = (
+
+        active_subs = (
             db.query(Subscription)
             .filter(
                 Subscription.user_id == user.id,
                 Subscription.is_active == True,
             )
-            .first()
+            .all()
         )
-        if not sub:
-            await cb.answer("No active subscription", show_alert=True)
-            return
-        new_source_id = next(iter(sel))
-        sub.source_id = new_source_id
+
+        active_source_ids = {sub.source_id for sub in active_subs}
+        selected_source_ids = {UUID(str(s)) for s in sel}
+
+        # Determine language to use for newly added sources
+        preferred_language = None
+        if active_subs:
+            preferred_language = active_subs[0].language
+
+        # Deactivate sources that are no longer selected
+        for sub in active_subs:
+            if sub.source_id not in selected_source_ids:
+                sub.is_active = False
+
+        # Add subscriptions for newly selected sources
+        ids_to_add = selected_source_ids - active_source_ids
+        if ids_to_add:
+            # Fallback to each source default language if no existing language
+            for src_id in ids_to_add:
+                lang_to_use = preferred_language
+                if not lang_to_use:
+                    # Load source to read default_language
+                    source = db.query(Source).filter(Source.id == str(src_id)).first()
+                    lang_to_use = source.default_language if source else "en"
+                db.add(
+                    Subscription(
+                        user_id=user.id,
+                        source_id=src_id,
+                        language=lang_to_use,
+                        is_active=True,
+                    )
+                )
+
+        # Ensure selected existing subscriptions remain active
+        for sub in active_subs:
+            if sub.source_id in selected_source_ids:
+                sub.is_active = True
+
         db.commit()
     finally:
         db.close()

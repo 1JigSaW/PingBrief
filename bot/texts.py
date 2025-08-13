@@ -96,10 +96,10 @@ SELECTED_SOURCES_TEXT: Final[str] = (
 
 SUBSCRIPTION_CREATED_TEXT: Final[str] = (
     "🎉 <b>Subscription Created Successfully!</b>\n\n"
-    "📰 <b>Source:</b> {source}\n\n"
+    "📰 <b>Source(s):</b>\n{sources}\n\n"
     "🌍 <b>Language:</b> {flag} {language}\n\n"
     "📬 <b>What's next?</b>\n"
-    "We'll send you fresh articles from this source daily!\n\n"
+    "We'll send you fresh articles from these source(s) daily!\n\n"
     "⚙️ Click the button below to manage your subscription"
 )
 
@@ -113,7 +113,7 @@ REMOVED_SUBSCRIPTION_TEXT: Final[str] = (
 
 SUBSCRIPTION_UPDATED_TEXT: Final[str] = (
     "✅ <b>Subscription Updated</b>\n\n"
-    "📰 <b>Source:</b> {source}\n\n"
+    "📰 <b>Source(s):</b>\n{sources}\n\n"
     "🌍 <b>Language:</b> {flag} {language}\n\n"
     "⚙️ You can manage your subscription below."
 )

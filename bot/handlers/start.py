@@ -90,15 +90,25 @@ async def change_source(cb: CallbackQuery):
     chat = cb.from_user.id
     sel = get_selection(chat)
     sel.clear()
+    # Preselect currently active sources
+    db = get_sync_db()
+    try:
+        user = db.query(User).filter_by(telegram_id=str(cb.from_user.id)).one_or_none()
+        if user:
+            active_subs = [sub for sub in user.subscriptions if sub.is_active]
+            for sub in active_subs:
+                sel.add(sub.source_id)
+    finally:
+        db.close()
     set_source_selection_context(chat, "settings")
 
     from bot.handlers.sources import build_sources_kb
     kb = await build_sources_kb(
-        selected=set(),
+        selected=sel,
         context="settings",
     )
     await cb.message.edit_text(
-        text="📰 <b>Change Source</b>\n\nSelect a single source:",
+        text="📰 <b>Change Sources</b>\n\nSelect one or more sources:",
         reply_markup=kb,
     )
     await cb.answer()
