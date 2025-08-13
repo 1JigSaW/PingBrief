@@ -65,7 +65,9 @@ async def cmd_start(message: Message):
         clear_source_selection_context(message.from_user.id)
 
         from bot.handlers.sources import build_sources_kb
-        kb = await build_sources_kb(set())
+        kb = await build_sources_kb(
+            selected=set(),
+        )
         await message.answer(
             text=WELCOME_NEW_USER_TEXT,
             reply_markup=kb,
@@ -232,7 +234,9 @@ async def remove_subscriptions(cb: CallbackQuery):
         sel.clear()
         clear_source_selection_context(cb.from_user.id)
         from bot.handlers.sources import build_sources_kb
-        kb = await build_sources_kb(set())
+        kb = await build_sources_kb(
+            selected=set(),
+        )
         await cb.message.edit_text(
             text=WELCOME_NEW_USER_TEXT,
             reply_markup=kb,

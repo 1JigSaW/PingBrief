@@ -69,11 +69,8 @@ class TechCrunchParser:
                 pub_date=item.get("pubDate"),
             )
 
-            # If exists without content, enrich in-place
             if existing_item and (not existing_item.content or len(str(existing_item.content).strip()) == 0):
-                # 1) Full-Text RSS service
                 content = self.ftr.extract(link) if link else None
-                # 2) WordPress REST API
                 if not content:
                     extracted_title, content = self._extract_via_wp_api(
                         link=link,
@@ -106,9 +103,7 @@ class TechCrunchParser:
             if existing_item:
                 continue
 
-            # 1) Full-Text RSS service
             content = self.ftr.extract(link) if link else None
-            # 2) WordPress REST API
             extracted_title, wp_content = self._extract_via_wp_api(
                 link=link,
                 guid=item.get("guid"),
@@ -116,19 +111,16 @@ class TechCrunchParser:
             if not content and wp_content:
                 content = wp_content
 
-            # 4.5) Full-Text RSS service fallback
             if not content and link:
                 ftr_text = self.ftr.extract(link)
                 if ftr_text and len(ftr_text) > 50:
                     content = ftr_text
 
-            # Last resort: try to fetch raw HTML from WP API and/or use RSS description
             if not content:
                 raw_title_html, raw_content_html = self._extract_via_wp_api_raw_html(
                     link=link,
                 )
                 if raw_content_html:
-                    # Store raw HTML if text extraction failed
                     content = raw_content_html
                     if not extracted_title and raw_title_html:
                         extracted_title = self._html_to_text(raw_title_html)
@@ -144,7 +136,6 @@ class TechCrunchParser:
 
             final_title = (extracted_title or title or "").strip()
             if not final_title:
-                # Skip broken entries
                 continue
 
             if not content:
@@ -179,7 +170,6 @@ class TechCrunchParser:
             feed_parsed = urlparse(self.feed_url)
             base = f"{parsed.scheme or feed_parsed.scheme}://{parsed.netloc or feed_parsed.netloc}"
             qs = parse_qs((parsed.query or ""))
-            # Try to get post id from link ?p=, or from guid ?p=, or numeric guid
             post_id_vals = qs.get("p")
             if (not post_id_vals or not post_id_vals[0].isdigit()) and guid:
                 try:
@@ -205,7 +195,6 @@ class TechCrunchParser:
                     if content:
                         return title, content
 
-            # Try slug approach
             path_parts = [p for p in ((parsed.path or "").split("/")) if p]
             if path_parts:
                 slug = path_parts[-1]

@@ -30,7 +30,6 @@ app = FastAPI(
 
 log.info("app_startup", msg="Starting application", host="0.0.0.0", port=8000)
 
-# роутеры
 for router in routers:
     app.include_router(router, prefix=settings.api_v1_str)
 app.include_router(users_router, prefix=settings.api_v1_str)

@@ -21,7 +21,10 @@ async def build_sources_kb(selected, context: str = "onboarding"):
     builder = InlineKeyboardBuilder()
     for src in sources:
         mark = "✅ " if src.id in selected else "📰 "
-        builder.button(text=f"{mark}{src.name}", callback_data=f"toggle_src:{src.id}")
+        builder.button(
+            text=f"{mark}{src.name}",
+            callback_data=f"toggle_src:{src.id}",
+        )
 
     if len(selected) > 0:
         next_text = "➡️ Continue"
@@ -30,7 +33,10 @@ async def build_sources_kb(selected, context: str = "onboarding"):
         next_text = "⚠️ Select at least one source"
         next_callback = "no_sources_selected"
     
-    builder.button(text=next_text, callback_data=next_callback)
+    builder.button(
+        text=next_text,
+        callback_data=next_callback,
+    )
     builder.adjust(2)
     return builder.as_markup()
 
@@ -44,8 +50,13 @@ async def toggle_src(cb: CallbackQuery):
     else:
         sel.add(src_id)
     context = get_source_selection_context(chat)
-    kb = await build_sources_kb(sel, context=context)
-    await cb.message.edit_reply_markup(reply_markup=kb)
+    kb = await build_sources_kb(
+        selected=sel,
+        context=context,
+    )
+    await cb.message.edit_reply_markup(
+        reply_markup=kb,
+    )
     await cb.answer()
 
 @router.callback_query(lambda c: c.data == "no_sources_selected")
