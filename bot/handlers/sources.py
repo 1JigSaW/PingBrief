@@ -132,24 +132,19 @@ async def sources_apply(cb: CallbackQuery):
         active_source_ids = {sub.source_id for sub in active_subs}
         selected_source_ids = {UUID(str(s)) for s in sel}
 
-        # Determine language to use for newly added sources
         preferred_language = None
         if active_subs:
             preferred_language = active_subs[0].language
 
-        # Deactivate sources that are no longer selected
         for sub in active_subs:
             if sub.source_id not in selected_source_ids:
                 sub.is_active = False
 
-        # Add subscriptions for newly selected sources
         ids_to_add = selected_source_ids - active_source_ids
         if ids_to_add:
-            # Fallback to each source default language if no existing language
             for src_id in ids_to_add:
                 lang_to_use = preferred_language
                 if not lang_to_use:
-                    # Load source to read default_language
                     source = db.query(Source).filter(Source.id == str(src_id)).first()
                     lang_to_use = source.default_language if source else "en"
                 db.add(
@@ -161,7 +156,6 @@ async def sources_apply(cb: CallbackQuery):
                     )
                 )
 
-        # Ensure selected existing subscriptions remain active
         for sub in active_subs:
             if sub.source_id in selected_source_ids:
                 sub.is_active = True
@@ -170,7 +164,6 @@ async def sources_apply(cb: CallbackQuery):
     finally:
         db.close()
 
-    # Clear selection and return to settings view
     from bot.state import pop_selection as _pop_selection
     _pop_selection(chat)
     from bot.handlers.start import show_settings

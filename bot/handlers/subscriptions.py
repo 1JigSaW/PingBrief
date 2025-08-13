@@ -72,12 +72,10 @@ async def language_chosen(cb: CallbackQuery):
             db.add(user)
             db.flush()
 
-        # Resolve language entity
         language = db.query(Language).filter(Language.code == code).first()
         language_name = language.name if language else code
         flag_emoji = get_flag_emoji(code)
 
-        # Currently active subscriptions
         active_subs = (
             db.query(Subscription)
             .filter(
@@ -87,11 +85,9 @@ async def language_chosen(cb: CallbackQuery):
             .all()
         )
 
-        # sel already contains UUIDs from bot.state
         selected_source_ids = set(sel)
 
         if selected_source_ids:
-            # Create or update subscriptions for all selected sources
             existing_by_source = {sub.source_id: sub for sub in active_subs}
             for src_id in selected_source_ids:
                 sub = existing_by_source.get(src_id)
@@ -109,12 +105,10 @@ async def language_chosen(cb: CallbackQuery):
                     )
             db.commit()
         else:
-            # No selected sources (e.g., language change from settings): update all active to new language
             for sub in active_subs:
                 sub.language = code
             db.commit()
 
-        # Prepare message
         if selected_source_ids:
             selected_sources = (
                 db.query(Source)
@@ -138,8 +132,6 @@ async def language_chosen(cb: CallbackQuery):
     )
     kb.adjust(1)
     
-    # Determine template based on whether the user had any subscriptions before
-    # If user had no subscriptions before this action, treat as created; else updated
     had_subscriptions = False
     try:
         db = get_sync_db()

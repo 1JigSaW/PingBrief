@@ -60,7 +60,6 @@ async def cmd_start(message: Message):
             db.add(user)
             db.commit()
 
-        # Ensure clean onboarding state
         sel = get_selection(message.from_user.id)
         sel.clear()
         clear_source_selection_context(message.from_user.id)
@@ -229,8 +228,6 @@ async def remove_subscriptions(cb: CallbackQuery):
                 sub.is_active = False
             db.commit()
 
-        # Immediately start onboarding: select sources again
-        # Reset selection and context to onboarding
         sel = get_selection(cb.from_user.id)
         sel.clear()
         clear_source_selection_context(cb.from_user.id)
