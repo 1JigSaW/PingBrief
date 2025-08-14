@@ -57,7 +57,7 @@ def summarize_fresh_news(
         )
         for ni in items:
             if not ni.content or len(ni.content.strip()) < 40:
-                ni.summary = f"• {ni.title}\n• {ni.url}"
+                ni.summary = f"{ni.title}\n{ni.url}"
                 continue
             summary = agent.summarize(
                 payload=SummarizeInput(

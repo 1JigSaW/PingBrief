@@ -49,6 +49,7 @@ services:
     depends_on:
       - redis
       - postgres
+      - libretranslate
     entrypoint: []
     command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info"]
 
@@ -60,6 +61,7 @@ services:
     depends_on:
       - redis
       - postgres
+      - libretranslate
     entrypoint: []
     command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel=info"]
 
@@ -82,6 +84,13 @@ services:
       - FTR_CONNECT_TIMEOUT=10
     depends_on:
       - postgres
+
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    restart: always
+    environment:
+      - LT_DEBUG=false
+      - LT_LOAD_ONLY=en,ru,es,fr,de,zh,ja,ko,it,pt,ar,hi,tr,nl,sv
 
 volumes:
   postgres_data:

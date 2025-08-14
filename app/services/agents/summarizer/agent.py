@@ -95,25 +95,11 @@ class SummarizerAgent:
     ) -> str:
         cleaned = (text or "").strip()
         lines = [
-            l.strip()
+            l.strip().lstrip("•-*").lstrip().lstrip("0123456789. ")
             for l in cleaned.splitlines()
             if l.strip()
         ]
-        bullets: list[str] = []
-        for line in lines:
-            if line.startswith("•"):
-                bullets.append(
-                    line if line.startswith("• ") else ("• " + line.lstrip("• ").strip()),
-                )
-            elif line.startswith("-") or line.startswith("*"):
-                bullets.append(
-                    "• " + line.lstrip("-* ").strip(),
-                )
-            else:
-                bullets.append(
-                    "• " + line,
-                )
-        result = "\n".join(bullets[:5])
+        result = "\n".join(lines[:5])
         if len(result) > 700:
             result = result[:700].rstrip()
         return result
