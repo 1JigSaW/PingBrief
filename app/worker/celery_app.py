@@ -41,4 +41,13 @@ celery_app.conf.beat_schedule = {
             500,
         ),
     },
+    "dispatch-every-5-minutes": {
+        "task": "app.tasks.news_tasks.dispatch_news_updates",
+        "schedule": 300.0,
+        "args": (
+            5,
+            5,
+            False,
+        ),
+    },
 }
