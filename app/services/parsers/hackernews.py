@@ -32,7 +32,11 @@ class HackerNewsParser:
             self.db.add(source)
             self.db.commit()
 
-        ids = requests.get(f"{self.api}/newstories.json").json()[:limit]
+        # Use top stories instead of newstories to get only high-score items
+        ids = requests.get(
+            url=f"{self.api}/topstories.json",
+            timeout=15,
+        ).json()[:limit]
 
         for sid in ids:
             sid_str = str(sid)
@@ -48,7 +52,12 @@ class HackerNewsParser:
             if exists:
                 continue
 
-            item = requests.get(f"{self.api}/item/{sid}.json").json()
+            item = requests.get(
+                url=f"{self.api}/item/{sid}.json",
+                timeout=15,
+            ).json()
+            if item.get("type") != "story":
+                continue
             url = item.get("url") or f"{self.web}/item?id={sid}"
             title = item.get("title", "")
             ts = datetime.fromtimestamp(item.get("time", 0))

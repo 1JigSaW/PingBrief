@@ -15,7 +15,7 @@ celery_app = Celery(
 celery_app.conf.beat_schedule = {
     "techcrunch-every-5-minutes": {
         "task": "app.tasks.news_tasks.parse_techcrunch",
-        "schedule": 60.0,
+        "schedule": 300.0,
         "args": (
             50,
         ),
@@ -25,6 +25,13 @@ celery_app.conf.beat_schedule = {
         "schedule": 300.0,
         "args": (
             50,
+        ),
+    },
+    "summarize-every-5-minutes": {
+        "task": "app.tasks.news_tasks.summarize_fresh_news",
+        "schedule": 300.0,
+        "args": (
+            200,
         ),
     },
 }
