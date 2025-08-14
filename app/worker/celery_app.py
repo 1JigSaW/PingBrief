@@ -34,4 +34,11 @@ celery_app.conf.beat_schedule = {
             200,
         ),
     },
+    "translate-every-5-minutes": {
+        "task": "app.tasks.news_tasks.translate_needed_summaries",
+        "schedule": 300.0,
+        "args": (
+            500,
+        ),
+    },
 }

@@ -322,3 +322,49 @@ class NewsItem(Base, TimestampMixin):
         Boolean,
         default=True,
     )
+
+
+class NewsItemTranslation(Base, TimestampMixin):
+    __tablename__ = "news_item_translations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        index=True,
+    )
+
+    news_item_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("news_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    language: Mapped[str] = mapped_column(
+        String(8),
+        ForeignKey("languages.code"),
+        nullable=False,
+        comment="Target language (ISO 639-1)",
+        index=True,
+    )
+
+    provider: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="libretranslate",
+        comment="Translation provider",
+    )
+
+    content_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        comment="Hash of base summary to invalidate stale translations",
+        index=True,
+    )
+
+    summary_translated: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        comment="Translated summary text",
+    )
