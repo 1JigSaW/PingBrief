@@ -6,7 +6,9 @@ from uuid import UUID
 from app.db.models import User, Subscription, Language, Source
 from app.db.session import get_sync_db
 from bot.state import get_selection, pop_selection
-from bot.texts import SUBSCRIPTION_CREATED_TEXT, SUBSCRIPTION_UPDATED_TEXT
+from datetime import datetime
+from bot.texts import SUBSCRIPTION_CREATED_TEXT, SUBSCRIPTION_UPDATED_TEXT, PAYWALL_MULTIPLE_SOURCES_TEXT
+from bot.keyboards.builders import build_paywall_keyboard
 
 router = Router()
 
@@ -86,6 +88,17 @@ async def language_chosen(cb: CallbackQuery):
         )
 
         selected_source_ids = set(sel)
+
+        # Paywall safety check from DB (persistent premium)
+        if selected_source_ids and len(selected_source_ids) > 1:
+            has_premium = bool(user and user.premium_until and user.premium_until > datetime.utcnow())
+            if not has_premium:
+                await cb.message.answer(
+                    text=PAYWALL_MULTIPLE_SOURCES_TEXT,
+                    reply_markup=build_paywall_keyboard().as_markup(),
+                )
+                await cb.answer()
+                return
 
         if selected_source_ids:
             existing_by_source = {sub.source_id: sub for sub in active_subs}

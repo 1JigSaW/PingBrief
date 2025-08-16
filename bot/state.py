@@ -3,6 +3,7 @@ from typing import Dict, Set
 
 _selection: Dict[int, Set[UUID]] = {}
 _source_selection_context: Dict[int, str] = {}
+_premium_users: Set[int] = set()
 
 def get_selection(chat_id: int) -> Set[UUID]:
     return _selection.setdefault(chat_id, set())
@@ -18,3 +19,15 @@ def get_source_selection_context(chat_id: int) -> str:
 
 def clear_source_selection_context(chat_id: int) -> None:
     _source_selection_context.pop(chat_id, None)
+
+
+def set_premium(
+    user_id: int,
+) -> None:
+    _premium_users.add(user_id)
+
+
+def is_premium(
+    user_id: int,
+) -> bool:
+    return user_id in _premium_users

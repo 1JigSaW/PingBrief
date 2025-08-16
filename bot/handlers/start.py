@@ -139,6 +139,8 @@ async def cmd_help_button(cb: CallbackQuery):
     await cmd_help(cb.message)
     await cb.answer()
 
+
+
 async def show_settings(user_id: int, message_or_callback):
     """Render the settings screen for both message and callback contexts."""
     db = get_sync_db()

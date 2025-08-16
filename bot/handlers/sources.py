@@ -6,8 +6,14 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import select
 from app.db.models import Source, User, Subscription
 from app.db.session import get_sync_db
-from bot.state import get_selection, get_source_selection_context, clear_source_selection_context
-from bot.texts import SELECTED_SOURCES_TEXT
+from bot.state import (
+    get_selection,
+    get_source_selection_context,
+    clear_source_selection_context,
+)
+from datetime import datetime
+from bot.texts import SELECTED_SOURCES_TEXT, PAYWALL_MULTIPLE_SOURCES_TEXT
+from bot.keyboards.builders import build_paywall_keyboard
 
 router = Router()
 
@@ -50,6 +56,28 @@ async def toggle_src(cb: CallbackQuery):
     else:
         sel.add(src_id)
     context = get_source_selection_context(chat)
+    # Immediate paywall if выбрано > 1 и пользователь не премиум
+    if len(sel) > 1:
+        # Check persistent premium in DB
+        db = get_sync_db()
+        try:
+            user = db.query(User).filter_by(telegram_id=str(chat)).one_or_none()
+            has_premium = bool(user and user.premium_until and user.premium_until > datetime.utcnow())
+        finally:
+            db.close()
+        if not has_premium:
+            await cb.message.answer(
+                text=PAYWALL_MULTIPLE_SOURCES_TEXT,
+                reply_markup=build_paywall_keyboard().as_markup(),
+            )
+            await cb.answer()
+            return
+        await cb.message.answer(
+            text=PAYWALL_MULTIPLE_SOURCES_TEXT,
+            reply_markup=build_paywall_keyboard().as_markup(),
+        )
+        await cb.answer()
+        return
     kb = await build_sources_kb(
         selected=sel,
         context=context,
@@ -57,7 +85,9 @@ async def toggle_src(cb: CallbackQuery):
     await cb.message.edit_reply_markup(
         reply_markup=kb,
     )
-    await cb.answer()
+    await cb.answer(
+        text=f"Selected: {len(sel)}",
+    )
 
 @router.callback_query(lambda c: c.data == "no_sources_selected")
 async def no_sources_selected(cb: CallbackQuery):
@@ -70,6 +100,28 @@ async def sources_done(cb: CallbackQuery):
     
     if len(sel) == 0:
         await cb.answer("⚠️ Please select at least one news source to continue", show_alert=True)
+        return
+
+    # Paywall: allow 1 source for free; more than 1 requires Premium (skip if premium)
+    if len(sel) > 1:
+        db = get_sync_db()
+        try:
+            user = db.query(User).filter_by(telegram_id=str(cb.from_user.id)).one_or_none()
+            has_premium = bool(user and user.premium_until and user.premium_until > datetime.utcnow())
+        finally:
+            db.close()
+        if not has_premium:
+            await cb.message.answer(
+                text=PAYWALL_MULTIPLE_SOURCES_TEXT,
+                reply_markup=build_paywall_keyboard().as_markup(),
+            )
+            await cb.answer()
+            return
+        await cb.message.answer(
+            text=PAYWALL_MULTIPLE_SOURCES_TEXT,
+            reply_markup=build_paywall_keyboard().as_markup(),
+        )
+        await cb.answer()
         return
 
     db = get_sync_db()
@@ -122,6 +174,28 @@ async def sources_apply(cb: CallbackQuery):
     sel = get_selection(chat)
     if len(sel) == 0:
         await cb.answer("⚠️ Please select at least one news source to continue", show_alert=True)
+        return
+
+    # Paywall for settings apply: more than 1 source requires Premium (skip if premium)
+    if len(sel) > 1:
+        db = get_sync_db()
+        try:
+            user = db.query(User).filter_by(telegram_id=str(cb.from_user.id)).one_or_none()
+            has_premium = bool(user and user.premium_until and user.premium_until > datetime.utcnow())
+        finally:
+            db.close()
+        if not has_premium:
+            await cb.message.answer(
+                text=PAYWALL_MULTIPLE_SOURCES_TEXT,
+                reply_markup=build_paywall_keyboard().as_markup(),
+            )
+            await cb.answer()
+            return
+        await cb.message.answer(
+            text=PAYWALL_MULTIPLE_SOURCES_TEXT,
+            reply_markup=build_paywall_keyboard().as_markup(),
+        )
+        await cb.answer()
         return
 
     db = get_sync_db()
@@ -179,4 +253,49 @@ async def sources_apply(cb: CallbackQuery):
     _pop_selection(chat)
     from bot.handlers.start import show_settings
     await show_settings(cb.from_user.id, cb.message)
+    await cb.answer()
+
+@router.callback_query(lambda c: c.data == "keep_one_source")
+async def keep_one_source(cb: CallbackQuery):
+    chat = cb.from_user.id
+    sel = get_selection(chat)
+    if len(sel) == 0:
+        await cb.answer("No sources selected", show_alert=True)
+        return
+
+    kept_id = next(iter(sel))
+    sel.clear()
+    sel.add(kept_id)
+
+    from bot.handlers.subscriptions import build_languages_kb
+    kb = await build_languages_kb()
+    db = get_sync_db()
+    try:
+        selected_sources = db.query(Source).filter(Source.id.in_(list(sel))).all()
+        sources_text = "\n".join([f"📰 <b>{src.name}</b>" for src in selected_sources])
+    finally:
+        db.close()
+
+    await cb.message.edit_text(
+        text=SELECTED_SOURCES_TEXT.format(
+            count=1,
+            sources=sources_text,
+        ),
+        reply_markup=kb,
+    )
+    await cb.answer()
+
+@router.callback_query(lambda c: c.data == "back_to_selection")
+async def back_to_selection(cb: CallbackQuery):
+    chat = cb.from_user.id
+    sel = get_selection(chat)
+    context = get_source_selection_context(chat)
+    kb = await build_sources_kb(
+        selected=sel,
+        context=context,
+    )
+    await cb.message.edit_text(
+        text="📰 <b>Select Sources</b>\n\nTap to select/deselect.",
+        reply_markup=kb,
+    )
     await cb.answer()

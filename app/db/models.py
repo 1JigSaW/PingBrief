@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     DateTime,
     Text,
+    Integer,
     Enum as SAEnum,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -72,6 +73,12 @@ class User(Base, TimestampMixin):
         default=True,
         nullable=False,
         comment="Active flag",
+    )
+
+    premium_until: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+        comment="Premium access valid until (UTC)",
     )
 
     subscriptions: Mapped[list["Subscription"]] = relationship(
@@ -368,3 +375,69 @@ class NewsItemTranslation(Base, TimestampMixin):
         nullable=False,
         comment="Translated summary text",
     )
+
+
+class PaymentStatus(str, Enum):
+    PAID = "paid"
+    FAILED = "failed"
+
+
+class Payment(Base, TimestampMixin):
+    __tablename__ = "payments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        index=True,
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    telegram_payment_charge_id: Mapped[str] = mapped_column(
+        String(128),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    provider_payment_charge_id: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+    )
+
+    payload: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+    )
+
+    currency: Mapped[str] = mapped_column(
+        String(8),
+        default="XTR",
+        nullable=False,
+    )
+
+    amount_stars: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    status: Mapped[PaymentStatus] = mapped_column(
+        SAEnum(PaymentStatus),
+        default=PaymentStatus.PAID,
+        nullable=False,
+    )
+
+    user: Mapped["User"] = relationship(
+        back_populates="payments",
+    )
+
+User.payments = relationship(
+    "Payment",
+    back_populates="user",
+    cascade="all, delete-orphan",
+)

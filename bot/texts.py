@@ -56,6 +56,14 @@ UNKNOWN_COMMAND_TEXT: Final[str] = (
 )
 
 
+PAYWALL_MULTIPLE_SOURCES_TEXT: Final[str] = (
+    "⭐ <b>Premium required</b>\n\n"
+    "Free plan allows <b>1 source</b>.\n\n"
+    "To use multiple sources, please purchase Premium.\n\n"
+    "Choose an option below:"
+)
+
+
 NO_SUBSCRIPTIONS_TEXT: Final[str] = (
     "📭 <b>No subscriptions found</b>\n\n"
     "You don't have any subscriptions yet.\n"

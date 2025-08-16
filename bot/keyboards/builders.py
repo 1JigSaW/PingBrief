@@ -63,6 +63,10 @@ def build_settings_keyboard() -> InlineKeyboardBuilder:
         callback_data="change_language",
     )
     builder.button(
+        text="⭐ Premium",
+        callback_data="open_premium",
+    )
+    builder.button(
         text="🗑️ Remove subscription",
         callback_data="remove_subscriptions",
     )
@@ -85,6 +89,24 @@ def build_go_start_keyboard() -> InlineKeyboardBuilder:
     builder.button(
         text="🚀 /start",
         callback_data="cmd_start",
+    )
+    builder.adjust(1)
+    return builder
+
+
+def build_paywall_keyboard() -> InlineKeyboardBuilder:
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="⭐ Buy Premium",
+        callback_data="open_premium",
+    )
+    builder.button(
+        text="✅ Keep 1 source",
+        callback_data="keep_one_source",
+    )
+    builder.button(
+        text="◀️ Back",
+        callback_data="back_to_selection",
     )
     builder.adjust(1)
     return builder

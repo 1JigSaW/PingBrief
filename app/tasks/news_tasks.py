@@ -377,6 +377,30 @@ def _escape_html(
     )
 
 
+def _escape_html_attr(
+    text: str,
+) -> str:
+    return (
+        text
+        .replace(
+            "&",
+            "&amp;",
+        )
+        .replace(
+            '"',
+            "&quot;",
+        )
+        .replace(
+            "<",
+            "&lt;",
+        )
+        .replace(
+            ">",
+            "&gt;",
+        )
+    )
+
+
 def _render_single_message(
     title: str,
     summary: str,
@@ -387,17 +411,20 @@ def _render_single_message(
     )
     concise = _shorten_summary(
         text=summary or "",
-        max_sentences=1,
-        max_chars=220,
+        max_sentences=2,
+        max_chars=300,
     )
     safe_summary = _escape_html(
         text=concise,
+    )
+    safe_url_attr = _escape_html_attr(
+        text=url,
     )
     return "\n".join(
         [
             f"🆕 <b>{safe_title}</b>",
             f"📝 {safe_summary}",
-            f"🔗 {url}",
+            f'🔗 <a href="{safe_url_attr}">link</a>',
         ]
     )
 
