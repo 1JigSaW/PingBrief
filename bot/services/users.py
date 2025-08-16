@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Subscription, User
 from app.db.session import get_sync_db
+from datetime import datetime
 
 
 def get_user_by_telegram_id(
@@ -78,6 +79,26 @@ def list_active_subscriptions(
     try:
         db.refresh(user)
         return [sub for sub in user.subscriptions if sub.is_active]
+    finally:
+        db.close()
+
+
+def has_active_premium(
+    telegram_id: str,
+) -> bool:
+    """Return True if user has active premium (premium_until > now)."""
+    db = get_sync_db()
+    try:
+        user = (
+            db.query(User)
+            .filter_by(
+                telegram_id=telegram_id,
+            )
+            .one_or_none()
+        )
+        if not user or not user.premium_until:
+            return False
+        return user.premium_until > datetime.utcnow()
     finally:
         db.close()
 

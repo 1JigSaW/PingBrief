@@ -35,6 +35,19 @@ async def open_premium(
     cb: CallbackQuery,
 ) -> None:
     """Open invoice for Premium using Telegram Stars (XTR)."""
+    # Block invoice if user already has active premium
+    db = get_sync_db()
+    try:
+        user = db.query(User).filter_by(telegram_id=str(cb.from_user.id)).one_or_none()
+        has_premium = bool(user and user.premium_until and user.premium_until > datetime.utcnow())
+    finally:
+        db.close()
+    if has_premium:
+        await cb.message.answer(
+            text="✅ Premium is already active. You don't need to purchase again.",
+        )
+        await cb.answer()
+        return
     await cb.message.answer_invoice(
         title=PREMIUM_TITLE,
         description=PREMIUM_DESCRIPTION,
@@ -57,6 +70,25 @@ async def pre_checkout_handler(
 ) -> None:
     """Confirm checkout for Premium invoices."""
     if query.invoice_payload == PREMIUM_PAYLOAD:
+        # Prevent duplicate purchase if premium already active
+        db = get_sync_db()
+        try:
+            user = (
+                db.query(User)
+                .filter_by(
+                    telegram_id=str(query.from_user.id),
+                )
+                .one_or_none()
+            )
+            has_premium = bool(user and user.premium_until and user.premium_until > datetime.utcnow())
+        finally:
+            db.close()
+        if has_premium:
+            await query.answer(
+                ok=False,
+                error_message="You already have Premium.",
+            )
+            return
         await query.answer(
             ok=True,
         )

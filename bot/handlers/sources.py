@@ -1,11 +1,13 @@
 from uuid import UUID
 
 from aiogram import Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import select
 from app.db.models import Source, User, Subscription
 from app.db.session import get_sync_db
+from bot.services.users import has_active_premium
 from bot.state import (
     get_selection,
     get_source_selection_context,
@@ -58,14 +60,9 @@ async def toggle_src(cb: CallbackQuery):
     context = get_source_selection_context(chat)
     # Immediate paywall if выбрано > 1 и пользователь не премиум
     if len(sel) > 1:
-        # Check persistent premium in DB
-        db = get_sync_db()
-        try:
-            user = db.query(User).filter_by(telegram_id=str(chat)).one_or_none()
-            has_premium = bool(user and user.premium_until and user.premium_until > datetime.utcnow())
-        finally:
-            db.close()
-        if not has_premium:
+        if not has_active_premium(
+            telegram_id=str(chat),
+        ):
             await cb.message.answer(
                 text=PAYWALL_MULTIPLE_SOURCES_TEXT,
                 reply_markup=build_paywall_keyboard().as_markup(),
@@ -82,9 +79,14 @@ async def toggle_src(cb: CallbackQuery):
         selected=sel,
         context=context,
     )
-    await cb.message.edit_reply_markup(
-        reply_markup=kb,
-    )
+    try:
+        await cb.message.edit_reply_markup(
+            reply_markup=kb,
+        )
+    except TelegramBadRequest as exc:
+        # Ignore harmless race where markup is identical
+        if "message is not modified" not in str(exc):
+            raise
     await cb.answer(
         text=f"Selected: {len(sel)}",
     )
@@ -104,13 +106,9 @@ async def sources_done(cb: CallbackQuery):
 
     # Paywall: allow 1 source for free; more than 1 requires Premium (skip if premium)
     if len(sel) > 1:
-        db = get_sync_db()
-        try:
-            user = db.query(User).filter_by(telegram_id=str(cb.from_user.id)).one_or_none()
-            has_premium = bool(user and user.premium_until and user.premium_until > datetime.utcnow())
-        finally:
-            db.close()
-        if not has_premium:
+        if not has_active_premium(
+            telegram_id=str(cb.from_user.id),
+        ):
             await cb.message.answer(
                 text=PAYWALL_MULTIPLE_SOURCES_TEXT,
                 reply_markup=build_paywall_keyboard().as_markup(),
@@ -178,13 +176,9 @@ async def sources_apply(cb: CallbackQuery):
 
     # Paywall for settings apply: more than 1 source requires Premium (skip if premium)
     if len(sel) > 1:
-        db = get_sync_db()
-        try:
-            user = db.query(User).filter_by(telegram_id=str(cb.from_user.id)).one_or_none()
-            has_premium = bool(user and user.premium_until and user.premium_until > datetime.utcnow())
-        finally:
-            db.close()
-        if not has_premium:
+        if not has_active_premium(
+            telegram_id=str(cb.from_user.id),
+        ):
             await cb.message.answer(
                 text=PAYWALL_MULTIPLE_SOURCES_TEXT,
                 reply_markup=build_paywall_keyboard().as_markup(),
