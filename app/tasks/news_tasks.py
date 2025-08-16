@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
@@ -139,18 +140,23 @@ def dispatch_news_updates(
     window_minutes: int = 5,
     max_items_per_subscription: int = 5,
     fallback_to_en_if_missing: bool = False,
+    max_backlog_hours: int = 48,
+    max_messages_per_chat_per_run: int = 3,
+    batch_threshold: int = 3,
 ):
-    """Send fresh news per subscription.
+    """Send fresh news per subscription with cursor-based delivery.
 
-    - 1–2 items → per-item messages with small pacing;
-    - 3+ items → one batch message;
+    - Uses last sent digest timestamp per subscription as the cursor.
+    - Respects per-chat message budget per run to avoid spamming.
+    - 1–(batch_threshold-1) items → per-item messages; ≥ batch_threshold → single batch.
     - Language strictly equals subscription language; optional EN fallback.
     """
     settings = get_settings()
     db = SessionLocalSync()
     try:
-        since_ts = datetime.utcnow() - timedelta(
-            minutes=window_minutes,
+        now_ts = datetime.utcnow()
+        cutoff_min_ts = now_ts - timedelta(
+            hours=max_backlog_hours,
         )
 
         users: List[User] = (
@@ -186,6 +192,7 @@ def dispatch_news_updates(
                         chat_id=chat_id,
                         text=text,
                         disable_notification=silent,
+                        disable_web_page_preview=True,
                     )
                     await asyncio.sleep(
                         0.25,
@@ -197,17 +204,38 @@ def dispatch_news_updates(
         per_chat_sent_in_batch: Dict[str, int] = {}
 
         for telegram_id, subs in user_id_to_active_subs.items():
+            chat_budget = per_chat_sent_in_batch.get(
+                telegram_id,
+                0,
+            )
             for sub in subs:
+                if chat_budget >= max_messages_per_chat_per_run:
+                    break
+
+                last_digest: Optional[Digest] = (
+                    db.query(Digest)
+                    .filter(
+                        Digest.subscription_id == sub.id,
+                        Digest.status == DigestStatus.SENT,
+                    )
+                    .order_by(
+                        Digest.sent_at.desc(),
+                    )
+                    .first()
+                )
+                last_sent_at = last_digest.sent_at if last_digest and last_digest.sent_at else cutoff_min_ts
+
                 items: List[NewsItem] = (
                     db.query(NewsItem)
                     .filter(
                         NewsItem.source_id == sub.source_id,
                         NewsItem.is_active.is_(True),
-                        NewsItem.fetched_at >= since_ts,
+                        NewsItem.fetched_at > last_sent_at,
+                        NewsItem.fetched_at >= cutoff_min_ts,
                         NewsItem.summary.is_not(None),
                     )
                     .order_by(
-                        NewsItem.fetched_at.desc(),
+                        NewsItem.fetched_at.asc(),
                     )
                     .limit(
                         max_items_per_subscription,
@@ -236,8 +264,8 @@ def dispatch_news_updates(
                 if not new_items:
                     continue
 
-                # 1–2 per-item, else batch
-                if len(new_items) <= 2:
+                # 1–(batch_threshold-1) per-item, else batch
+                if len(new_items) < batch_threshold:
                     for ni in new_items:
                         summ = _pick_summary_for_lang(
                             db=db,
@@ -256,6 +284,8 @@ def dispatch_news_updates(
                             telegram_id,
                             0,
                         )
+                        if count >= max_messages_per_chat_per_run:
+                            break
                         sends_plan.append(
                             (
                                 telegram_id,
@@ -264,6 +294,7 @@ def dispatch_news_updates(
                             ),
                         )
                         per_chat_sent_in_batch[telegram_id] = count + 1
+                        chat_budget = per_chat_sent_in_batch[telegram_id]
                         _record_digest(
                             db=db,
                             sub=sub,
@@ -303,6 +334,8 @@ def dispatch_news_updates(
                         telegram_id,
                         0,
                     )
+                    if count >= max_messages_per_chat_per_run:
+                        continue
                     sends_plan.append(
                         (
                             telegram_id,
@@ -311,6 +344,7 @@ def dispatch_news_updates(
                         ),
                     )
                     per_chat_sent_in_batch[telegram_id] = count + 1
+                    chat_budget = per_chat_sent_in_batch[telegram_id]
 
         if sends_plan:
             asyncio.run(
@@ -351,13 +385,18 @@ def _render_single_message(
     safe_title = _escape_html(
         text=title,
     )
+    concise = _shorten_summary(
+        text=summary or "",
+        max_sentences=1,
+        max_chars=220,
+    )
     safe_summary = _escape_html(
-        text=(summary or "")[:900],
+        text=concise,
     )
     return "\n".join(
         [
             f"🆕 <b>{safe_title}</b>",
-            safe_summary,
+            f"📝 {safe_summary}",
             f"🔗 {url}",
         ]
     )
@@ -417,4 +456,25 @@ def _pick_summary_for_lang(
     if fallback_to_en:
         return (item.summary or "").strip() or None
     return None
+
+
+def _shorten_summary(
+    text: str,
+    max_sentences: int = 2,
+    max_chars: int = 300,
+) -> str:
+    content = (text or "").strip()
+    if not content:
+        return ""
+    # Split by sentence boundaries.
+    sentences = re.split(
+        pattern=r"(?<=[\.!?])\s+",
+        string=content,
+    )
+    picked = " ".join(
+        sentences[: max(1, max_sentences)],
+    ).strip()
+    if len(picked) > max_chars:
+        return picked[: max_chars - 1].rstrip() + "…"
+    return picked
 

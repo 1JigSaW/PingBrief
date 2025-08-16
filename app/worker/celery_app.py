@@ -22,32 +22,35 @@ celery_app.conf.beat_schedule = {
     },
     "hn-every-5-minutes": {
         "task": "app.tasks.news_tasks.parse_hackernews",
-        "schedule": 300.0,
+        "schedule": 60.0,
         "args": (
             50,
         ),
     },
     "summarize-every-5-minutes": {
         "task": "app.tasks.news_tasks.summarize_fresh_news",
-        "schedule": 300.0,
+        "schedule": 60.0,
         "args": (
             200,
         ),
     },
     "translate-every-5-minutes": {
         "task": "app.tasks.news_tasks.translate_needed_summaries",
-        "schedule": 300.0,
+        "schedule": 60.0,
         "args": (
             500,
         ),
     },
     "dispatch-every-5-minutes": {
         "task": "app.tasks.news_tasks.dispatch_news_updates",
-        "schedule": 300.0,
-        "args": (
-            5,
-            5,
-            False,
-        ),
+        "schedule": 60.0,
+        "kwargs": {
+            "window_minutes": 5,
+            "max_items_per_subscription": 5,
+            "fallback_to_en_if_missing": False,
+            "max_backlog_hours": 48,
+            "max_messages_per_chat_per_run": 3,
+            "batch_threshold": 3,
+        },
     },
 }
