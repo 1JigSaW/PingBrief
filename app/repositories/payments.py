@@ -9,6 +9,7 @@ from app.db.session import get_sync_db
 def exists_by_telegram_charge_id(
     telegram_payment_charge_id: str,
 ) -> bool:
+    """Return True if payment with given telegram charge id exists."""
     db = get_sync_db()
     try:
         exists = (
@@ -34,6 +35,7 @@ def create_payment(
     price_stars: int | None = None,
     term_days: int | None = None,
 ) -> Payment:
+    """Persist payment record and return it."""
     db = get_sync_db()
     try:
         payment = Payment(

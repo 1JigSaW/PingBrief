@@ -12,6 +12,7 @@ from app.db.session import get_sync_db
 def list_active_sources(
     
 ) -> List[Source]:
+    """Return all active sources."""
     db = get_sync_db()
     try:
         sources = (
@@ -31,6 +32,7 @@ def list_active_sources(
 def get_sources_by_ids(
     source_ids: Iterable[UUID],
 ) -> List[Source]:
+    """Return all sources given their IDs."""
     ids_list = [UUID(str(s)) for s in source_ids]
     db = get_sync_db()
     try:

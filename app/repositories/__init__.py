@@ -1,8 +1,8 @@
 """Repository layer for database access.
 
-This package exposes simple, focused functions to read and write data.
-Handlers and services should depend on this layer instead of touching
-ORM sessions directly.
+Synchronous repositories are used by the Telegram bot (aiogram) where
+sync SQLAlchemy sessions are appropriate. For FastAPI async endpoints,
+use repositories under `app.repositories.async_repo`.
 """
 
 
