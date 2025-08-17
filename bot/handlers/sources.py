@@ -4,27 +4,32 @@ from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from sqlalchemy import select
-from app.db.models import Source, User, Subscription
+from app.db.models import User, Subscription
 from app.db.session import get_sync_db
-from bot.services.users import has_active_premium
+from app.repositories import sources as sources_repo
+from app.repositories import subscriptions as subscriptions_repo
+from app.repositories import users as users_repo
 from bot.state import (
     get_selection,
     get_source_selection_context,
     clear_source_selection_context,
+    set_last_selected_source,
+    get_last_selected_source,
 )
-from datetime import datetime
-from bot.texts import SELECTED_SOURCES_TEXT, PAYWALL_MULTIPLE_SOURCES_TEXT
-from bot.keyboards.builders import build_paywall_keyboard
+from bot.texts import (
+    SELECTED_SOURCES_TEXT,
+    PAYWALL_MULTIPLE_SOURCES_TEXT,
+    LOADING_PREPARE_LANG_TEXT,
+    LOADING_APPLY_CHANGES_TEXT,
+    SELECT_AT_LEAST_ONE_SOURCE_TEXT,
+    SELECT_SOURCES_HEADER_TEXT,
+)
+from bot.keyboards.builders import build_paywall_keyboard, build_paywall_keyboard_with_keep_options
 
 router = Router()
 
 async def build_sources_kb(selected, context: str = "onboarding"):
-    db = get_sync_db()
-    try:
-        sources = db.execute(select(Source).where(Source.is_active)).scalars().all()
-    finally:
-        db.close()
+    sources = sources_repo.list_active_sources()
 
     builder = InlineKeyboardBuilder()
     for src in sources:
@@ -57,24 +62,34 @@ async def toggle_src(cb: CallbackQuery):
         sel.remove(src_id)
     else:
         sel.add(src_id)
+        set_last_selected_source(
+            chat_id=chat,
+            source_id=src_id,
+        )
     context = get_source_selection_context(chat)
-    # Immediate paywall if выбрано > 1 и пользователь не премиум
-    if len(sel) > 1:
-        if not has_active_premium(
-            telegram_id=str(chat),
-        ):
-            await cb.message.answer(
-                text=PAYWALL_MULTIPLE_SOURCES_TEXT,
-                reply_markup=build_paywall_keyboard().as_markup(),
+    if len(sel) > 1 and not users_repo.has_active_premium(
+        telegram_id=str(chat),
+    ):
+        try:
+            await cb.answer(
+                text="Free plan allows 1 source. Deselect one or buy Premium.",
+                show_alert=True,
             )
-            await cb.answer()
-            return
+        except TelegramBadRequest:
+            pass
+        selected_sources = sources_repo.get_sources_by_ids(
+            source_ids=list(sel),
+        )
+        last = get_last_selected_source(chat)
+        ordered = sorted(selected_sources, key=lambda s: 0 if (last and s.id == last) else 1)
+        options = [(s.name, str(s.id)) for s in ordered[:2]]
+        kb_pay = build_paywall_keyboard_with_keep_options(options)
         await cb.message.answer(
             text=PAYWALL_MULTIPLE_SOURCES_TEXT,
-            reply_markup=build_paywall_keyboard().as_markup(),
+            reply_markup=kb_pay.as_markup(),
         )
-        await cb.answer()
         return
+
     kb = await build_sources_kb(
         selected=sel,
         context=context,
@@ -83,17 +98,16 @@ async def toggle_src(cb: CallbackQuery):
         await cb.message.edit_reply_markup(
             reply_markup=kb,
         )
-    except TelegramBadRequest as exc:
-        # Ignore harmless race where markup is identical
-        if "message is not modified" not in str(exc):
-            raise
-    await cb.answer(
-        text=f"Selected: {len(sel)}",
-    )
+    except TelegramBadRequest:
+        pass
+    await cb.answer()
 
 @router.callback_query(lambda c: c.data == "no_sources_selected")
 async def no_sources_selected(cb: CallbackQuery):
-    await cb.answer("⚠️ Please select at least one news source to continue", show_alert=True)
+    await cb.answer(
+        text=SELECT_AT_LEAST_ONE_SOURCE_TEXT,
+        show_alert=True,
+    )
 
 @router.callback_query(lambda c: c.data == "sources_done")
 async def sources_done(cb: CallbackQuery):
@@ -101,33 +115,41 @@ async def sources_done(cb: CallbackQuery):
     sel = get_selection(chat)
     
     if len(sel) == 0:
-        await cb.answer("⚠️ Please select at least one news source to continue", show_alert=True)
+        await cb.answer(
+            text=SELECT_AT_LEAST_ONE_SOURCE_TEXT,
+            show_alert=True,
+        )
         return
 
-    # Paywall: allow 1 source for free; more than 1 requires Premium (skip if premium)
-    if len(sel) > 1:
-        if not has_active_premium(
-            telegram_id=str(cb.from_user.id),
-        ):
-            await cb.message.answer(
-                text=PAYWALL_MULTIPLE_SOURCES_TEXT,
-                reply_markup=build_paywall_keyboard().as_markup(),
-            )
-            await cb.answer()
-            return
+    if len(sel) > 1 and not users_repo.has_active_premium(
+        telegram_id=str(cb.from_user.id),
+    ):
+        selected_sources = sources_repo.get_sources_by_ids(
+            source_ids=list(sel),
+        )
+        last = get_last_selected_source(chat)
+        ordered = sorted(selected_sources, key=lambda s: 0 if (last and s.id == last) else 1)
+        options = [(s.name, str(s.id)) for s in ordered[:2]]
+        kb = build_paywall_keyboard_with_keep_options(options)
         await cb.message.answer(
             text=PAYWALL_MULTIPLE_SOURCES_TEXT,
-            reply_markup=build_paywall_keyboard().as_markup(),
+            reply_markup=kb.as_markup(),
         )
         await cb.answer()
         return
 
-    db = get_sync_db()
+    await cb.answer()
     try:
-        selected_sources = db.query(Source).filter(Source.id.in_(list(sel))).all()
-        sources_text = "\n".join([f"📰 <b>{src.name}</b>" for src in selected_sources])
-    finally:
-        db.close()
+        await cb.message.edit_text(
+            text=LOADING_PREPARE_LANG_TEXT,
+        )
+    except TelegramBadRequest:
+        pass
+
+    selected_sources = sources_repo.get_sources_by_ids(
+        source_ids=list(sel),
+    )
+    sources_text = "\n".join([f"📰 <b>{src.name}</b>" for src in selected_sources])
 
     context = get_source_selection_context(chat)
     if context == "onboarding":
@@ -145,18 +167,11 @@ async def sources_done(cb: CallbackQuery):
         try:
             user = db.query(User).filter_by(telegram_id=str(cb.from_user.id)).one_or_none()
             if user:
-                sub = (
-                    db.query(Subscription)
-                    .filter(
-                        Subscription.user_id == user.id,
-                        Subscription.is_active == True,
-                    )
-                    .first()
+                new_source_id = next(iter(sel))
+                subscriptions_repo.set_first_active_subscription_source(
+                    user_id=user.id,
+                    new_source_id=new_source_id,
                 )
-                if sub:
-                    new_source_id = next(iter(sel))
-                    sub.source_id = new_source_id
-                    db.commit()
         finally:
             db.close()
         clear_source_selection_context(chat)
@@ -171,26 +186,36 @@ async def sources_apply(cb: CallbackQuery):
     chat = cb.from_user.id
     sel = get_selection(chat)
     if len(sel) == 0:
-        await cb.answer("⚠️ Please select at least one news source to continue", show_alert=True)
+        await cb.answer(
+            text=SELECT_AT_LEAST_ONE_SOURCE_TEXT,
+            show_alert=True,
+        )
         return
 
-    # Paywall for settings apply: more than 1 source requires Premium (skip if premium)
-    if len(sel) > 1:
-        if not has_active_premium(
-            telegram_id=str(cb.from_user.id),
-        ):
-            await cb.message.answer(
-                text=PAYWALL_MULTIPLE_SOURCES_TEXT,
-                reply_markup=build_paywall_keyboard().as_markup(),
-            )
-            await cb.answer()
-            return
+    if len(sel) > 1 and not users_repo.has_active_premium(
+        telegram_id=str(cb.from_user.id),
+    ):
+        selected_sources = sources_repo.get_sources_by_ids(
+            source_ids=list(sel),
+        )
+        last = get_last_selected_source(chat)
+        ordered = sorted(selected_sources, key=lambda s: 0 if (last and s.id == last) else 1)
+        options = [(s.name, str(s.id)) for s in ordered[:2]]
+        kb = build_paywall_keyboard_with_keep_options(options)
         await cb.message.answer(
             text=PAYWALL_MULTIPLE_SOURCES_TEXT,
-            reply_markup=build_paywall_keyboard().as_markup(),
+            reply_markup=kb.as_markup(),
         )
         await cb.answer()
         return
+
+    await cb.answer()
+    try:
+        await cb.message.edit_text(
+            text=LOADING_APPLY_CHANGES_TEXT,
+        )
+    except TelegramBadRequest:
+        pass
 
     db = get_sync_db()
     try:
@@ -199,47 +224,11 @@ async def sources_apply(cb: CallbackQuery):
             await cb.answer("User not found", show_alert=True)
             return
 
-        active_subs = (
-            db.query(Subscription)
-            .filter(
-                Subscription.user_id == user.id,
-                Subscription.is_active == True,
-            )
-            .all()
-        )
-
-        active_source_ids = {sub.source_id for sub in active_subs}
         selected_source_ids = {UUID(str(s)) for s in sel}
-
-        preferred_language = None
-        if active_subs:
-            preferred_language = active_subs[0].language
-
-        for sub in active_subs:
-            if sub.source_id not in selected_source_ids:
-                sub.is_active = False
-
-        ids_to_add = selected_source_ids - active_source_ids
-        if ids_to_add:
-            for src_id in ids_to_add:
-                lang_to_use = preferred_language
-                if not lang_to_use:
-                    source = db.query(Source).filter(Source.id == str(src_id)).first()
-                    lang_to_use = source.default_language if source else "en"
-                db.add(
-                    Subscription(
-                        user_id=user.id,
-                        source_id=src_id,
-                        language=lang_to_use,
-                        is_active=True,
-                    )
-                )
-
-        for sub in active_subs:
-            if sub.source_id in selected_source_ids:
-                sub.is_active = True
-
-        db.commit()
+        subscriptions_repo.apply_sources_selection(
+            user_id=user.id,
+            selected_source_ids=selected_source_ids,
+        )
     finally:
         db.close()
 
@@ -249,7 +238,7 @@ async def sources_apply(cb: CallbackQuery):
     await show_settings(cb.from_user.id, cb.message)
     await cb.answer()
 
-@router.callback_query(lambda c: c.data == "keep_one_source")
+@router.callback_query(lambda c: c.data and c.data.startswith("keep_one_source"))
 async def keep_one_source(cb: CallbackQuery):
     chat = cb.from_user.id
     sel = get_selection(chat)
@@ -257,18 +246,24 @@ async def keep_one_source(cb: CallbackQuery):
         await cb.answer("No sources selected", show_alert=True)
         return
 
-    kept_id = next(iter(sel))
+    kept_id = None
+    if ":" in cb.data:
+        try:
+            kept_id = UUID(cb.data.split(":",1)[1])
+        except Exception:
+            kept_id = None
+    if not kept_id:
+        last = get_last_selected_source(chat)
+        kept_id = last if last in sel else next(iter(sel))
     sel.clear()
     sel.add(kept_id)
 
     from bot.handlers.subscriptions import build_languages_kb
     kb = await build_languages_kb()
-    db = get_sync_db()
-    try:
-        selected_sources = db.query(Source).filter(Source.id.in_(list(sel))).all()
-        sources_text = "\n".join([f"📰 <b>{src.name}</b>" for src in selected_sources])
-    finally:
-        db.close()
+    selected_sources = sources_repo.get_sources_by_ids(
+        source_ids=list(sel),
+    )
+    sources_text = "\n".join([f"📰 <b>{src.name}</b>" for src in selected_sources])
 
     await cb.message.edit_text(
         text=SELECTED_SOURCES_TEXT.format(
@@ -289,7 +284,7 @@ async def back_to_selection(cb: CallbackQuery):
         context=context,
     )
     await cb.message.edit_text(
-        text="📰 <b>Select Sources</b>\n\nTap to select/deselect.",
+        text=SELECT_SOURCES_HEADER_TEXT,
         reply_markup=kb,
     )
     await cb.answer()

@@ -7,7 +7,9 @@ settings = get_settings()
 
 bot = Bot(
     token=settings.telegram_bot_token,
-    default=DefaultBotProperties(parse_mode="HTML")
+    default=DefaultBotProperties(
+        parse_mode="HTML",
+    ),
 )
 dp = Dispatcher(storage=MemoryStorage())
 
@@ -19,4 +21,6 @@ dp.include_router(subscriptions.router)
 dp.include_router(premium.router)
 
 if __name__ == "__main__":
-    dp.run_polling(bot)
+    dp.run_polling(
+        bot=bot,
+    )

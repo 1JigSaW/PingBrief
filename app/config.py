@@ -46,7 +46,6 @@ class Settings(BaseSettings):
     hackernews_api_url: AnyUrl = "https://hacker-news.firebaseio.com/v0"
     hackernews_web_url: AnyUrl = "https://news.ycombinator.com/"
 
-    # Premium billing config
     premium_price_stars: int = 1
     premium_term_days: int = 30
     premium_is_lifetime: bool = True

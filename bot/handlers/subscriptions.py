@@ -5,52 +5,56 @@ from uuid import UUID
 
 from app.db.models import User, Subscription, Language, Source
 from app.db.session import get_sync_db
+from app.repositories import languages as languages_repo
+from app.repositories import subscriptions as subscriptions_repo
+from app.repositories import sources as sources_repo
+from app.repositories import users as users_repo
+from bot.utils.flags import get_flag_emoji
 from bot.state import get_selection, pop_selection
 from datetime import datetime
-from bot.texts import SUBSCRIPTION_CREATED_TEXT, SUBSCRIPTION_UPDATED_TEXT, PAYWALL_MULTIPLE_SOURCES_TEXT
+from bot.texts import (
+    SUBSCRIPTION_CREATED_TEXT,
+    SUBSCRIPTION_UPDATED_TEXT,
+    PAYWALL_MULTIPLE_SOURCES_TEXT,
+    LOADING_SAVING_PREFS_TEXT,
+)
 from bot.keyboards.builders import build_paywall_keyboard
 
 router = Router()
 
 TOP_LANGUAGES = [
-    "en",  # English
-    "ru",  # Russian
-    "es",  # Spanish
-    "fr",  # French
-    "de",  # German
-    "zh",  # Chinese
-    "ja",  # Japanese
-    "ko",  # Korean
-    "it",  # Italian
-    "pt",  # Portuguese
-    "ar",  # Arabic
-    "hi",  # Hindi
-    "tr",  # Turkish
-    "nl",  # Dutch
-    "sv",  # Swedish
+    "en",
+    "ru",
+    "es",
+    "fr",
+    "de",
+    "zh",
+    "ja",
+    "ko",
+    "it",
+    "pt",
+    "ar",
+    "hi",
+    "tr",
+    "nl",
+    "sv",
 ]
 
 async def build_languages_kb():
-    db = get_sync_db()
-    try:
-        langs = db.query(Language).filter(Language.code.in_(TOP_LANGUAGES)).all()
-    finally:
-        db.close()
+    langs = languages_repo.list_by_codes(
+        codes=TOP_LANGUAGES,
+    )
     kb = InlineKeyboardBuilder()
     for lang in langs:
-        flag_emoji = get_flag_emoji(lang.code)
-        kb.button(text=f"{flag_emoji} {lang.name}", callback_data=f"lang:{lang.code}")
+        flag_emoji = get_flag_emoji(
+            language_code=lang.code,
+        )
+        kb.button(
+            text=f"{flag_emoji} {lang.name}",
+            callback_data=f"lang:{lang.code}",
+        )
     kb.adjust(2)
     return kb.as_markup()
-
-def get_flag_emoji(lang_code):
-    """Get flag emoji for language code"""
-    flag_map = {
-        "en": "🇺🇸", "ru": "🇷🇺", "es": "🇪🇸", "fr": "🇫🇷", "de": "🇩🇪",
-        "zh": "🇨🇳", "ja": "🇯🇵", "ko": "🇰🇷", "it": "🇮🇹", "pt": "🇵🇹",
-        "ar": "🇸🇦", "hi": "🇮🇳", "tr": "🇹🇷", "nl": "🇳🇱", "sv": "🇸🇪"
-    }
-    return flag_map.get(lang_code, "🌍")
 
 @router.callback_query(lambda c: c.data and c.data.startswith("lang:"))
 async def language_chosen(cb: CallbackQuery):
@@ -60,38 +64,41 @@ async def language_chosen(cb: CallbackQuery):
     )[1]
     chat = cb.from_user.id
     sel = get_selection(chat)
+    await cb.answer()
+    try:
+        await cb.message.edit_text(
+            text=LOADING_SAVING_PREFS_TEXT,
+        )
+    except Exception:
+        pass
+
     db = get_sync_db()
     try:
-        user = (
-            db.query(User)
-            .filter_by(
-                telegram_id=str(cb.from_user.id),
-            )
-            .one_or_none()
+        user = users_repo.ensure_user(
+            telegram_id=str(cb.from_user.id),
+            username=cb.from_user.username,
+            first_name=cb.from_user.first_name,
+            last_name=cb.from_user.last_name,
         )
-        if not user:
-            user = User(telegram_id=str(cb.from_user.id), username=cb.from_user.username)
-            db.add(user)
-            db.flush()
 
-        language = db.query(Language).filter(Language.code == code).first()
+        language = languages_repo.get_by_code(
+            code=code,
+        )
         language_name = language.name if language else code
-        flag_emoji = get_flag_emoji(code)
+        flag_emoji = get_flag_emoji(
+            language_code=code,
+        )
 
-        active_subs = (
-            db.query(Subscription)
-            .filter(
-                Subscription.user_id == user.id,
-                Subscription.is_active == True,
-            )
-            .all()
+        all_subs = subscriptions_repo.list_by_user_id(
+            user_id=user.id,
         )
 
         selected_source_ids = set(sel)
 
-        # Paywall safety check from DB (persistent premium)
         if selected_source_ids and len(selected_source_ids) > 1:
-            has_premium = bool(user and user.premium_until and user.premium_until > datetime.utcnow())
+            has_premium = users_repo.has_active_premium(
+                telegram_id=str(cb.from_user.id),
+            )
             if not has_premium:
                 await cb.message.answer(
                     text=PAYWALL_MULTIPLE_SOURCES_TEXT,
@@ -101,40 +108,28 @@ async def language_chosen(cb: CallbackQuery):
                 return
 
         if selected_source_ids:
-            existing_by_source = {sub.source_id: sub for sub in active_subs}
-            for src_id in selected_source_ids:
-                sub = existing_by_source.get(src_id)
-                if sub:
-                    sub.language = code
-                    sub.is_active = True
-                else:
-                    db.add(
-                        Subscription(
-                            user_id=user.id,
-                            source_id=src_id,
-                            language=code,
-                            is_active=True,
-                        )
-                    )
-            db.commit()
-        else:
-            for sub in active_subs:
-                sub.language = code
-            db.commit()
-
-        if selected_source_ids:
-            selected_sources = (
-                db.query(Source)
-                .filter(Source.id.in_(list(selected_source_ids)))
-                .all()
+            subscriptions_repo.upsert_for_user_and_sources_with_language(
+                user_id=user.id,
+                source_ids=selected_source_ids,
+                language_code=code,
             )
         else:
-            selected_sources = [sub.source for sub in active_subs]
+            subscriptions_repo.set_language_for_all_user_subscriptions(
+                user_id=user.id,
+                language_code=code,
+            )
+
+        if selected_source_ids:
+            selected_sources = sources_repo.get_sources_by_ids(
+                source_ids=list(selected_source_ids),
+            )
+        else:
+            selected_sources = [sub.source for sub in all_subs if sub.is_active]
 
         sources_text = "\n".join([f"📰 <b>{src.name}</b>" for src in selected_sources]) if selected_sources else "Unknown source(s)"
 
         pop_selection(chat)
-        
+
     finally:
         db.close()
 

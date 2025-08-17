@@ -9,6 +9,8 @@ from sqlalchemy import (
     DateTime,
     Text,
     Integer,
+    UniqueConstraint,
+    Index,
     Enum as SAEnum,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -79,6 +81,17 @@ class User(Base, TimestampMixin):
         DateTime,
         nullable=True,
         comment="Premium access valid until (UTC)",
+    )
+
+    preferred_language: Mapped[str | None] = mapped_column(
+        String(8),
+        ForeignKey("languages.code"),
+        nullable=True,
+    )
+
+    timezone: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
     )
 
     subscriptions: Mapped[list["Subscription"]] = relationship(
@@ -210,6 +223,9 @@ Language.subscriptions = relationship(
     cascade="all, delete-orphan"
 )
 
+Index("ix_subscriptions_user_id", Subscription.user_id)
+UniqueConstraint(Subscription.user_id, Subscription.source_id, name="uq_subscription_user_source")
+
 
 class DigestStatus(str, Enum):
     PENDING = "pending"
@@ -284,6 +300,15 @@ class Digest(Base, TimestampMixin):
         back_populates="digests",
     )
 
+    telegram_message_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    __table_args__ = (
+        Index("ix_digests_status_scheduled_for", "status", "scheduled_for"),
+    )
+
 class NewsItem(Base, TimestampMixin):
     __tablename__ = "news_items"
 
@@ -325,9 +350,15 @@ class NewsItem(Base, TimestampMixin):
         nullable=False,
         comment="Time to schedule",
     )
+
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("source_id", "external_id", name="uq_news_item_source_external"),
+        Index("ix_news_items_source_fetched", "source_id", "fetched_at"),
     )
 
 
@@ -374,6 +405,10 @@ class NewsItemTranslation(Base, TimestampMixin):
         Text,
         nullable=False,
         comment="Translated summary text",
+    )
+
+    __table_args__ = (
+        UniqueConstraint("news_item_id", "language", "provider", name="uq_news_item_translation"),
     )
 
 
@@ -426,6 +461,16 @@ class Payment(Base, TimestampMixin):
         nullable=False,
     )
 
+    price_stars: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    term_days: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     status: Mapped[PaymentStatus] = mapped_column(
         SAEnum(PaymentStatus),
         default=PaymentStatus.PAID,
@@ -441,3 +486,5 @@ User.payments = relationship(
     back_populates="user",
     cascade="all, delete-orphan",
 )
+
+Index("ix_payments_user_id", Payment.user_id)

@@ -6,28 +6,69 @@ from aiogram.types import (
     PreCheckoutQuery,
 )
 
-from bot.state import (
-    set_premium,
-)
 from app.config import get_settings
 from app.db.session import get_sync_db
-from app.db.models import User, Payment, PaymentStatus
+from app.db.models import User, PaymentStatus
+from app.repositories import users as users_repo
+from app.repositories import payments as payments_repo
 from datetime import datetime, timedelta
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+import logging
+from bot.texts import (
+    PREMIUM_ACTIVE_TEXT,
+    PREMIUM_INACTIVE_TEXT,
+    PREMIUM_ALREADY_ACTIVE_TEXT,
+    PREMIUM_ALREADY_HAVE_TEXT,
+    PREMIUM_UNKNOWN_PRODUCT_TEXT,
+    PREMIUM_ACTIVATED_TEXT,
+    PREMIUM_ALREADY_ACTIVATED_TEXT,
+)
 
 
 router = Router()
+@router.message(F.text == "/premium")
+async def premium_status(
+    message: Message,
+) -> None:
+    db = get_sync_db()
+    try:
+        user = db.query(User).filter_by(telegram_id=str(message.from_user.id)).one_or_none()
+        has_premium = users_repo.has_active_premium(
+            telegram_id=str(message.from_user.id),
+        )
+        if has_premium and user and user.premium_until:
+            await message.answer(
+                text=PREMIUM_ACTIVE_TEXT.format(
+                    until=user.premium_until,
+                ),
+            )
+            return
+    finally:
+        db.close()
+
+    await message.answer_invoice(
+        title=PREMIUM_TITLE,
+        description=PREMIUM_DESCRIPTION,
+        payload=PREMIUM_PAYLOAD,
+        provider_token="",
+        currency=PREMIUM_CURRENCY,
+        prices=[
+            LabeledPrice(
+                label="Premium access",
+                amount=settings.premium_price_stars or PREMIUM_PRICE_STARS,
+            ),
+        ],
+    )
 
 
-# Constants for the Premium product
 PREMIUM_TITLE: str = "⭐ Premium"
 PREMIUM_DESCRIPTION: str = (
     "Unlock multiple sources and advanced features."
 )
 PREMIUM_PAYLOAD: str = "premium_unlimited_sources"
-PREMIUM_CURRENCY: str = "XTR"  # Telegram Stars
-# Amount is in the smallest units. For Stars, use integer stars (1 star = 1 unit)
+PREMIUM_CURRENCY: str = "XTR"
 settings = get_settings()
-PREMIUM_PRICE_STARS: int = 1  # overridden by settings if provided
+PREMIUM_PRICE_STARS: int = 1
 
 
 @router.callback_query(lambda c: c.data == "open_premium")
@@ -35,16 +76,17 @@ async def open_premium(
     cb: CallbackQuery,
 ) -> None:
     """Open invoice for Premium using Telegram Stars (XTR)."""
-    # Block invoice if user already has active premium
     db = get_sync_db()
     try:
         user = db.query(User).filter_by(telegram_id=str(cb.from_user.id)).one_or_none()
-        has_premium = bool(user and user.premium_until and user.premium_until > datetime.utcnow())
+        has_premium = users_repo.has_active_premium(
+            telegram_id=str(cb.from_user.id),
+        )
     finally:
         db.close()
     if has_premium:
         await cb.message.answer(
-            text="✅ Premium is already active. You don't need to purchase again.",
+            text=PREMIUM_ALREADY_ACTIVE_TEXT,
         )
         await cb.answer()
         return
@@ -70,7 +112,6 @@ async def pre_checkout_handler(
 ) -> None:
     """Confirm checkout for Premium invoices."""
     if query.invoice_payload == PREMIUM_PAYLOAD:
-        # Prevent duplicate purchase if premium already active
         db = get_sync_db()
         try:
             user = (
@@ -80,13 +121,15 @@ async def pre_checkout_handler(
                 )
                 .one_or_none()
             )
-            has_premium = bool(user and user.premium_until and user.premium_until > datetime.utcnow())
+            has_premium = users_repo.has_active_premium(
+                telegram_id=str(query.from_user.id),
+            )
         finally:
             db.close()
         if has_premium:
             await query.answer(
                 ok=False,
-                error_message="You already have Premium.",
+                error_message=PREMIUM_ALREADY_HAVE_TEXT,
             )
             return
         await query.answer(
@@ -95,7 +138,7 @@ async def pre_checkout_handler(
         return
     await query.answer(
         ok=False,
-        error_message="Unknown product",
+        error_message=PREMIUM_UNKNOWN_PRODUCT_TEXT,
     )
 
 
@@ -127,21 +170,16 @@ async def successful_payment_handler(
             db.add(user)
             db.flush()
 
-        # Idempotency: check charge id
-        exists = (
-            db.query(Payment)
-            .filter_by(
-                telegram_payment_charge_id=sp.telegram_payment_charge_id,
+        if payments_repo.exists_by_telegram_charge_id(
+            telegram_payment_charge_id=sp.telegram_payment_charge_id,
+        ):
+            await message.answer(
+                text=PREMIUM_ALREADY_ACTIVATED_TEXT,
             )
-            .one_or_none()
-        )
-        if exists:
-            await message.answer("✅ Premium is already activated.")
             db.close()
             return
 
-        # Record payment
-        payment = Payment(
+        payments_repo.create_payment(
             user_id=user.id,
             telegram_payment_charge_id=sp.telegram_payment_charge_id,
             provider_payment_charge_id=sp.provider_payment_charge_id,
@@ -149,14 +187,13 @@ async def successful_payment_handler(
             currency=sp.currency,
             amount_stars=sp.total_amount,
             status=PaymentStatus.PAID,
+            price_stars=sp.total_amount,
+            term_days=None if settings.premium_is_lifetime else settings.premium_term_days,
         )
-        db.add(payment)
 
-        # Extend premium_until (lifetime or fixed term)
         now = datetime.utcnow()
         current_until = user.premium_until or now
         if settings.premium_is_lifetime:
-            # Far future date to represent lifetime (e.g., +100 years)
             user.premium_until = max(current_until, now) + timedelta(days=365 * 100)
         else:
             term_days = settings.premium_term_days
@@ -165,11 +202,24 @@ async def successful_payment_handler(
     finally:
         db.close()
 
-    # Volatile cache for current process (optional)
-    set_premium(
-        user_id=user_id_telegram,
+    logging.getLogger(__name__).info(
+        "premium_activated",
+        extra={
+            "telegram_payment_charge_id": sp.telegram_payment_charge_id,
+            "total_amount": sp.total_amount,
+            "user_id": user_id_telegram,
+        },
     )
 
-    await message.answer("✅ Premium activated. You can now use multiple sources.")
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text="📰 Back to sources",
+        callback_data="back_to_selection",
+    )
+    kb.adjust(1)
+    await message.answer(
+        text=PREMIUM_ACTIVATED_TEXT,
+        reply_markup=kb.as_markup(),
+    )
 
 

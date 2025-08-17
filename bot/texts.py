@@ -8,41 +8,37 @@ from typing import Final
 
 
 WELCOME_NEW_USER_TEXT: Final[str] = (
-    "🚀 <b>Welcome to PingBrief!</b>\n\n"
-    "📰 <b>Your personal news aggregator</b>\n\n"
-    "Choose the news sources that interest you:\n"
-    "• Click on sources to select/deselect\n"
-    "• Select at least one source to continue\n"
-    "• We'll send you fresh articles daily"
+    "🚀 <b>Welcome to PingBrief</b>\n\n"
+    "Get concise daily news summaries — <b>in your chosen language</b> — from top sources, in one place.\n\n"
+    "• Pick sources below\n"
+    "• Tap <b>Continue</b>\n"
+    "• Choose your language on the next step"
 )
 
 
 WELCOME_EXISTING_USER_TEXT: Final[str] = (
-    "🎉 <b>Welcome back!</b>\n\n"
-    "You have <b>{count} active subscription(s)</b>:\n\n"
+    "🎉 <b>Welcome back</b>\n\n"
+    "You will receive concise daily summaries <b>in your chosen language</b> from:\n\n"
     "{sources}\n\n"
-    "📬 We'll send you fresh news from these source(s)!"
+    "Active sources: <b>{count}</b>. Manage them below."
 )
 
 
 HELP_TEXT: Final[str] = (
-    "🤖 <b>PingBrief Bot Help</b>\n\n"
-    "📰 <b>What is PingBrief?</b>\n"
-    "Your personal news aggregator that sends you fresh articles from your favorite sources.\n\n"
-    "📋 <b>Available Commands:</b>\n"
-    "• <code>/start</code> - Start the bot or create new subscriptions\n"
-    "• <code>/settings</code> - Manage your existing subscriptions\n"
-    "• <code>/help</code> - Show this help message\n\n"
-    "🎯 <b>How it works:</b>\n"
-    "1. Choose news sources you're interested in\n"
-    "2. Select your preferred language\n"
-    "3. Get daily news digests in your Telegram\n\n"
-    "⚙️ <b>Features:</b>\n"
-    "• Multiple news sources\n"
-    "• 15+ supported languages\n"
-    "• Daily news summaries\n"
-    "• Easy subscription management\n\n"
-    "💡 <b>Tip:</b> Use <code>/settings</code> to add more sources or change languages!"
+    "🤖 <b>PingBrief</b>\n\n"
+    "Choose sources → pick a language → receive concise digests.\n\n"
+    "Commands:\n"
+    "• <code>/start</code> — start or pick sources\n"
+    "• <code>/settings</code> — manage sources and language\n"
+    "• <code>/premium</code> — premium status and purchase"
+)
+LOADING_PREPARE_LANG_TEXT: Final[str] = "⏳ Preparing language options..."
+LOADING_APPLY_CHANGES_TEXT: Final[str] = "⏳ Applying changes..."
+LOADING_SAVING_PREFS_TEXT: Final[str] = "⏳ Saving your preferences..."
+
+PREMIUM_ACTIVE_TEXT: Final[str] = "✅ Premium is active until: <b>{until}</b>"
+PREMIUM_INACTIVE_TEXT: Final[str] = (
+    "❌ Premium is not active.\n\nTap the button below to purchase."
 )
 
 
@@ -79,53 +75,83 @@ NO_ACTIVE_SUBSCRIPTIONS_TEXT: Final[str] = (
 
 
 SETTINGS_HEADER_TEXT: Final[str] = (
-    "⚙️ <b>Subscription Settings</b>\n\n"
-    "You have <b>{count} active subscription(s)</b>:\n\n"
+    "⚙️ <b>Settings</b>\n\n"
+    "Active sources: <b>{count}</b>\n\n"
     "{sources}\n\n"
     "Choose an action:"
 )
 
 
 ADD_SUBSCRIPTION_HEADER_TEXT: Final[str] = (
-    "📰 <b>Add New Subscription</b>\n\n"
-    "Choose news sources for your new subscription:\n"
-    "• Click on sources to select/deselect\n"
-    "• Select at least one source to continue"
+    "📰 <b>Add sources</b>\n\n"
+    "Select one or more sources, then tap “Continue”."
 )
 
 
 SELECTED_SOURCES_TEXT: Final[str] = (
-    "📰 <b>Selected Sources</b>\n\n"
-    "You've selected <b>{count} source(s)</b>:\n\n"
+    "📰 <b>Selected sources</b>\n\n"
+    "You picked <b>{count}</b>:\n\n"
     "{sources}\n\n"
-    "🌍 Now choose the language for your subscription:"
+    "🌍 Choose your language:"
 )
 
 
 SUBSCRIPTION_CREATED_TEXT: Final[str] = (
-    "🎉 <b>Subscription Created Successfully!</b>\n\n"
-    "📰 <b>Source(s):</b>\n{sources}\n\n"
-    "🌍 <b>Language:</b> {flag} {language}\n\n"
-    "📬 <b>What's next?</b>\n"
-    "We'll send you fresh articles from these source(s) daily!\n\n"
-    "⚙️ Click the button below to manage your subscription"
+    "🎉 <b>All set</b>\n\n"
+    "Sources:\n{sources}\n\n"
+    "Language: {flag} {language}"
 )
 
 
 REMOVED_SUBSCRIPTION_TEXT: Final[str] = (
     "🗑️ <b>Subscription removed</b>\n\n"
-    "✅ Your subscription has been deactivated.\n\n"
-    "Click the button below to create a new subscription!"
+    "You can add sources again."
 )
 
 
 SUBSCRIPTION_UPDATED_TEXT: Final[str] = (
-    "✅ <b>Subscription Updated</b>\n\n"
-    "📰 <b>Source(s):</b>\n{sources}\n\n"
-    "🌍 <b>Language:</b> {flag} {language}\n\n"
-    "⚙️ You can manage your subscription below."
+    "✅ <b>Updated</b>\n\n"
+    "Sources:\n{sources}\n\n"
+    "Language: {flag} {language}"
 )
 
 
 START_FLOW_HEADER_TEXT: Final[str] = WELCOME_NEW_USER_TEXT
+
+# Additional UI messages
+SELECT_AT_LEAST_ONE_SOURCE_TEXT: Final[str] = (
+    "⚠️ Please select at least one news source to continue"
+)
+
+CHANGE_SOURCES_HEADER_TEXT: Final[str] = (
+    "📰 <b>Change Sources</b>\n\nSelect one or more sources:"
+)
+
+CHANGE_LANGUAGE_HEADER_TEXT: Final[str] = (
+    "🌍 <b>Change Language</b>\n\nSelect your preferred language:"
+)
+
+SELECT_SOURCES_HEADER_TEXT: Final[str] = (
+    "📰 <b>Select Sources</b>\n\nTap to select/deselect."
+)
+
+PREMIUM_ALREADY_ACTIVE_TEXT: Final[str] = (
+    "✅ Premium is already active. You don't need to purchase again."
+)
+
+PREMIUM_ALREADY_HAVE_TEXT: Final[str] = (
+    "You already have Premium."
+)
+
+PREMIUM_UNKNOWN_PRODUCT_TEXT: Final[str] = (
+    "Unknown product"
+)
+
+PREMIUM_ACTIVATED_TEXT: Final[str] = (
+    "✅ Premium activated. You can now use multiple sources."
+)
+
+PREMIUM_ALREADY_ACTIVATED_TEXT: Final[str] = (
+    "✅ Premium is already activated."
+)
 
