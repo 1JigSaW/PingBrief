@@ -4,6 +4,7 @@ import asyncio
 import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from aiogram import Bot
 from aiogram.client.bot import DefaultBotProperties
@@ -420,11 +421,17 @@ def _render_single_message(
     safe_url_attr = _escape_html_attr(
         text=url,
     )
+    domain = _extract_domain(
+        url=url,
+    )
+    safe_domain = _escape_html(
+        text=domain,
+    )
     return "\n".join(
         [
-            f"🆕 <b>{safe_title}</b>",
-            f"📝 {safe_summary}",
-            f'🔗 <a href="{safe_url_attr}">link</a>',
+            f"📰 <b>{safe_title}</b>",
+            f"{safe_summary}",
+            f'↗️ <a href="{safe_url_attr}">{safe_domain}</a>',
         ]
     )
 
@@ -504,4 +511,17 @@ def _shorten_summary(
     if len(picked) > max_chars:
         return picked[: max_chars - 1].rstrip() + "…"
     return picked
+
+
+def _extract_domain(
+    url: str,
+) -> str:
+    try:
+        parsed = urlparse(url or "")
+        host = parsed.netloc or "link"
+        if host.startswith("www."):
+            host = host[4:]
+        return host
+    except Exception:
+        return "link"
 
