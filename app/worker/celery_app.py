@@ -15,35 +15,35 @@ celery_app = Celery(
 celery_app.conf.beat_schedule = {
     "techcrunch-every-5-minutes": {
         "task": "app.tasks.news_tasks.parse_techcrunch",
-        "schedule": 300.0,
+        "schedule": 200.0,
         "args": (
             50,
         ),
     },
     "hn-every-5-minutes": {
         "task": "app.tasks.news_tasks.parse_hackernews",
-        "schedule": 60.0,
+        "schedule": 200.0,
         "args": (
             50,
         ),
     },
     "summarize-every-5-minutes": {
         "task": "app.tasks.news_tasks.summarize_fresh_news",
-        "schedule": 60.0,
+        "schedule": 200.0,
         "args": (
             200,
         ),
     },
     "translate-every-5-minutes": {
         "task": "app.tasks.news_tasks.translate_needed_summaries",
-        "schedule": 60.0,
+        "schedule": 200.0,
         "args": (
             500,
         ),
     },
     "dispatch-every-5-minutes": {
         "task": "app.tasks.news_tasks.dispatch_news_updates",
-        "schedule": 60.0,
+        "schedule": 200.0,
         "kwargs": {
             "window_minutes": 5,
             "max_items_per_subscription": 5,
