@@ -92,6 +92,9 @@ async def language_chosen(cb: CallbackQuery):
         all_subs = subscriptions_repo.list_by_user_id(
             user_id=user.id,
         )
+        had_active_before = any(
+            sub.is_active for sub in all_subs
+        )
 
         selected_source_ids = set(sel)
 
@@ -130,6 +133,14 @@ async def language_chosen(cb: CallbackQuery):
 
         pop_selection(chat)
 
+        # Determine whether this was the first-time creation
+        all_subs_after = subscriptions_repo.list_by_user_id(
+            user_id=user.id,
+        )
+        has_active_after = any(
+            sub.is_active for sub in all_subs_after
+        )
+
     finally:
         db.close()
 
@@ -140,15 +151,7 @@ async def language_chosen(cb: CallbackQuery):
     )
     kb.adjust(1)
     
-    had_subscriptions = False
-    try:
-        db = get_sync_db()
-        u = db.query(User).filter_by(telegram_id=str(cb.from_user.id)).one_or_none()
-        if u and u.subscriptions:
-            had_subscriptions = any(s.is_active for s in u.subscriptions)
-    finally:
-        db.close()
-    text_tpl = SUBSCRIPTION_UPDATED_TEXT if had_subscriptions else SUBSCRIPTION_CREATED_TEXT
+    text_tpl = SUBSCRIPTION_UPDATED_TEXT if had_active_before else SUBSCRIPTION_CREATED_TEXT
     await cb.message.edit_text(
         text=text_tpl.format(
             sources=sources_text,

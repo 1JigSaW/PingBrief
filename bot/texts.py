@@ -99,7 +99,8 @@ SELECTED_SOURCES_TEXT: Final[str] = (
 SUBSCRIPTION_CREATED_TEXT: Final[str] = (
     "🎉 <b>All set</b>\n\n"
     "Sources:\n{sources}\n\n"
-    "Language: {flag} {language}"
+    "Language: {flag} {language}\n\n"
+    "You will start receiving digests soon."
 )
 
 
