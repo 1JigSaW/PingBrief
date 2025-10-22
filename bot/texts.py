@@ -34,7 +34,7 @@ HELP_TEXT: Final[str] = (
 )
 LOADING_PREPARE_LANG_TEXT: Final[str] = "⏳ Preparing language options..."
 LOADING_APPLY_CHANGES_TEXT: Final[str] = "⏳ Applying changes..."
-LOADING_SAVING_PREFS_TEXT: Final[str] = "⏳ Saving your preferences..."
+LOADING_SAVING_PREFS_TEXT: Final[str] = "✅ Preferences saved."
 
 PREMIUM_ACTIVE_TEXT: Final[str] = "✅ Premium is active until: <b>{until}</b>"
 PREMIUM_INACTIVE_TEXT: Final[str] = (

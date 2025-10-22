@@ -1,10 +1,3 @@
-"""Abstractive summarization agent.
-
-This agent generates high-quality TL;DR summaries for articles using a
-compact, deterministic prompt and a mini LLM model. Summaries are intended
-to be concise (3–5 bullets), factual, and suitable for Telegram delivery.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

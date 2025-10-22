@@ -77,12 +77,13 @@ async def toggle_src(cb: CallbackQuery):
             )
         except TelegramBadRequest:
             pass
-        selected_sources = sources_repo.get_sources_by_ids(
-            source_ids=list(sel),
-        )
+        all_sources = sources_repo.list_active_sources()
         last = get_last_selected_source(chat)
-        ordered = sorted(selected_sources, key=lambda s: 0 if (last and s.id == last) else 1)
-        options = [(s.name, str(s.id)) for s in ordered[:2]]
+        ordered = sorted(all_sources, key=lambda s: 0 if (last and s.id == last) else 1)
+        options = [
+            (s.name, str(s.id))
+            for s in ordered
+        ]
         kb_pay = build_paywall_keyboard_with_keep_options(options)
         await cb.message.answer(
             text=PAYWALL_MULTIPLE_SOURCES_TEXT,
@@ -124,12 +125,13 @@ async def sources_done(cb: CallbackQuery):
     if len(sel) > 1 and not users_repo.has_active_premium(
         telegram_id=str(cb.from_user.id),
     ):
-        selected_sources = sources_repo.get_sources_by_ids(
-            source_ids=list(sel),
-        )
+        all_sources = sources_repo.list_active_sources()
         last = get_last_selected_source(chat)
-        ordered = sorted(selected_sources, key=lambda s: 0 if (last and s.id == last) else 1)
-        options = [(s.name, str(s.id)) for s in ordered[:2]]
+        ordered = sorted(all_sources, key=lambda s: 0 if (last and s.id == last) else 1)
+        options = [
+            (s.name, str(s.id))
+            for s in ordered
+        ]
         kb = build_paywall_keyboard_with_keep_options(options)
         await cb.message.answer(
             text=PAYWALL_MULTIPLE_SOURCES_TEXT,
@@ -195,12 +197,13 @@ async def sources_apply(cb: CallbackQuery):
     if len(sel) > 1 and not users_repo.has_active_premium(
         telegram_id=str(cb.from_user.id),
     ):
-        selected_sources = sources_repo.get_sources_by_ids(
-            source_ids=list(sel),
-        )
+        all_sources = sources_repo.list_active_sources()
         last = get_last_selected_source(chat)
-        ordered = sorted(selected_sources, key=lambda s: 0 if (last and s.id == last) else 1)
-        options = [(s.name, str(s.id)) for s in ordered[:2]]
+        ordered = sorted(all_sources, key=lambda s: 0 if (last and s.id == last) else 1)
+        options = [
+            (s.name, str(s.id))
+            for s in ordered
+        ]
         kb = build_paywall_keyboard_with_keep_options(options)
         await cb.message.answer(
             text=PAYWALL_MULTIPLE_SOURCES_TEXT,

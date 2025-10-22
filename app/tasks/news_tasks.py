@@ -12,6 +12,7 @@ from aiogram.client.bot import DefaultBotProperties
 from app.db.session import SessionLocalSync
 from app.services.parsers.hackernews import HackerNewsParser
 from app.services.parsers.techcrunch import TechCrunchParser
+from app.services.parsers.generic_rss import GenericRssParser
 from app.worker.celery_app import celery_app
 from app.db.session import SessionLocalSync
 from app.db.models import (
@@ -58,6 +59,62 @@ def parse_techcrunch(
     finally:
         db.close()
 
+
+@celery_app.task(ignore_result=True)
+def parse_theverge(
+    limit: int = 50,
+):
+    db = SessionLocalSync()
+    try:
+        parser = GenericRssParser(
+            db=db,
+            source_name="The Verge",
+            feed_url="https://www.theverge.com/rss/index.xml",
+            default_language="en",
+        )
+        parser.save_new_sync(
+            limit=limit,
+        )
+    finally:
+        db.close()
+
+
+@celery_app.task(ignore_result=True)
+def parse_engadget(
+    limit: int = 50,
+):
+    db = SessionLocalSync()
+    try:
+        parser = GenericRssParser(
+            db=db,
+            source_name="Engadget",
+            feed_url="https://www.engadget.com/rss.xml",
+            default_language="en",
+        )
+        parser.save_new_sync(
+            limit=limit,
+        )
+    finally:
+        db.close()
+
+
+@celery_app.task(ignore_result=True)
+def parse_wired(
+    limit: int = 50,
+):
+    db = SessionLocalSync()
+    try:
+        parser = GenericRssParser(
+            db=db,
+            source_name="WIRED",
+            feed_url="https://www.wired.com/feed/rss",
+            default_language="en",
+        )
+        parser.save_new_sync(
+            limit=limit,
+        )
+    finally:
+        db.close()
 
 @celery_app.task(ignore_result=True)
 def summarize_fresh_news(
@@ -146,11 +203,6 @@ def dispatch_news_updates(
     batch_threshold: int = 3,
 ):
     """Send fresh news per subscription with cursor-based delivery.
-
-    - Uses last sent digest timestamp per subscription as the cursor.
-    - Respects per-chat message budget per run to avoid spamming.
-    - 1–(batch_threshold-1) items → per-item messages; ≥ batch_threshold → single batch.
-    - Language strictly equals subscription language; optional EN fallback.
     """
     settings = get_settings()
     db = SessionLocalSync()
@@ -265,7 +317,6 @@ def dispatch_news_updates(
                 if not new_items:
                     continue
 
-                # 1–(batch_threshold-1) per-item, else batch
                 if len(new_items) < batch_threshold:
                     for ni in new_items:
                         summ = _pick_summary_for_lang(

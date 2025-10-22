@@ -1,9 +1,3 @@
-"""Abstractive summarization agent.
-
-Generates high-quality TL;DR summaries in English as 3–5 bullets
-using a compact, deterministic prompt.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

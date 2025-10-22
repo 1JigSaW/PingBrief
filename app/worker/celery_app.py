@@ -34,6 +34,27 @@ celery_app.conf.beat_schedule = {
             200,
         ),
     },
+    "theverge-every-5-minutes": {
+        "task": "app.tasks.news_tasks.parse_theverge",
+        "schedule": 300.0,
+        "args": (
+            50,
+        ),
+    },
+    "engadget-every-5-minutes": {
+        "task": "app.tasks.news_tasks.parse_engadget",
+        "schedule": 300.0,
+        "args": (
+            50,
+        ),
+    },
+    "wired-every-5-minutes": {
+        "task": "app.tasks.news_tasks.parse_wired",
+        "schedule": 300.0,
+        "args": (
+            50,
+        ),
+    },
     "translate-every-5-minutes": {
         "task": "app.tasks.news_tasks.translate_needed_summaries",
         "schedule": 200.0,

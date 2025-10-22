@@ -12,7 +12,6 @@ class FullTextRssClient:
         base_url: Optional[str] = None,
         timeout_seconds: int = 20,
     ) -> None:
-        # Default to the service name in docker-compose
         self.base_url = base_url or os.getenv("FULL_TEXT_RSS_BASE_URL", "http://fulltextrss:80")
         self.timeout_seconds = timeout_seconds
         self.headers = {
@@ -28,7 +27,6 @@ class FullTextRssClient:
         self,
         url: str,
     ) -> Optional[str]:
-        # FiveFilters Full-Text RSS endpoint: /makefulltextfeed?url={url}&format=txt
         try:
             resp = requests.get(
                 f"{self.base_url}/makefulltextfeed",

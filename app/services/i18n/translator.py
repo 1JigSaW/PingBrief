@@ -1,9 +1,3 @@
-"""Translation service with DB persistence and Redis cache.
-
-Translates base English summaries to target languages used by active
-subscribers. Implements read-through and write-through caching.
-"""
-
 from __future__ import annotations
 
 import hashlib
