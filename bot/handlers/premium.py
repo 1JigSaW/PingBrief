@@ -63,7 +63,7 @@ async def premium_status(
 
 PREMIUM_TITLE: str = "⭐ Premium"
 PREMIUM_DESCRIPTION: str = (
-    "Unlock multiple sources and advanced features."
+    "Unlock multiple sources for 1 month."
 )
 PREMIUM_PAYLOAD: str = "premium_unlimited_sources"
 PREMIUM_CURRENCY: str = "XTR"
@@ -98,7 +98,7 @@ async def open_premium(
         currency=PREMIUM_CURRENCY,
         prices=[
             LabeledPrice(
-                label="Premium access",
+                label="Premium (1 month)",
                 amount=settings.premium_price_stars or PREMIUM_PRICE_STARS,
             ),
         ],

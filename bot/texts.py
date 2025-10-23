@@ -38,7 +38,7 @@ LOADING_SAVING_PREFS_TEXT: Final[str] = "✅ Preferences saved."
 
 PREMIUM_ACTIVE_TEXT: Final[str] = "✅ Premium is active until: <b>{until}</b>"
 PREMIUM_INACTIVE_TEXT: Final[str] = (
-    "❌ Premium is not active.\n\nTap the button below to purchase."
+    "❌ Premium is not active.\n\nTap below to purchase 1 month access."
 )
 
 
@@ -149,7 +149,7 @@ PREMIUM_UNKNOWN_PRODUCT_TEXT: Final[str] = (
 )
 
 PREMIUM_ACTIVATED_TEXT: Final[str] = (
-    "✅ Premium activated. You can now use multiple sources."
+    "✅ Premium activated for 1 month. You can now use multiple sources."
 )
 
 PREMIUM_ALREADY_ACTIVATED_TEXT: Final[str] = (

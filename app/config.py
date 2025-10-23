@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     premium_price_stars: int = 1
     premium_term_days: int = 30
-    premium_is_lifetime: bool = True
+    premium_is_lifetime: bool = False
 
     @field_validator("database_url", mode="before")
     def _assemble_database_url(cls, v, info):

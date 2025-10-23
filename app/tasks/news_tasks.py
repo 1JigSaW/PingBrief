@@ -469,11 +469,14 @@ def _render_single_message(
     safe_summary = _escape_html(
         text=concise,
     )
+    normalized_url = _normalize_url(
+        url=url,
+    )
     safe_url_attr = _escape_html_attr(
-        text=url,
+        text=normalized_url,
     )
     domain = _extract_domain(
-        url=url,
+        url=normalized_url,
     )
     safe_domain = _escape_html(
         text=domain,
@@ -569,10 +572,26 @@ def _extract_domain(
 ) -> str:
     try:
         parsed = urlparse(url or "")
-        host = parsed.netloc or "link"
+        host = parsed.netloc
+        if not host and url:
+            reparsed = urlparse(f"http://{url}")
+            host = reparsed.netloc
+        if not host:
+            host = "link"
         if host.startswith("www."):
             host = host[4:]
         return host
     except Exception:
         return "link"
+
+
+def _normalize_url(
+    url: str,
+) -> str:
+    val = (url or "").strip()
+    if not val:
+        return ""
+    if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", val):
+        return val
+    return f"https://{val}"
 
