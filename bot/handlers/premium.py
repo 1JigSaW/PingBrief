@@ -43,22 +43,22 @@ async def premium_status(
                 ),
             )
             return
+        
+        await message.answer_invoice(
+            title=PREMIUM_TITLE,
+            description=PREMIUM_DESCRIPTION,
+            payload=PREMIUM_PAYLOAD,
+            provider_token="",
+            currency=PREMIUM_CURRENCY,
+            prices=[
+                LabeledPrice(
+                    label="Premium (1 month)",
+                    amount=settings.premium_price_stars or PREMIUM_PRICE_STARS,
+                ),
+            ],
+        )
     finally:
         db.close()
-
-    await message.answer_invoice(
-        title=PREMIUM_TITLE,
-        description=PREMIUM_DESCRIPTION,
-        payload=PREMIUM_PAYLOAD,
-        provider_token="",
-        currency=PREMIUM_CURRENCY,
-        prices=[
-            LabeledPrice(
-                label="Premium access",
-                amount=settings.premium_price_stars or PREMIUM_PRICE_STARS,
-            ),
-        ],
-    )
 
 
 PREMIUM_TITLE: str = "⭐ Premium"

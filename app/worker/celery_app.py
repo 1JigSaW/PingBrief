@@ -74,4 +74,11 @@ celery_app.conf.beat_schedule = {
             "batch_threshold": 3,
         },
     },
+    "notify-premium-expired-every-2-minutes": {
+        "task": "app.tasks.news_tasks.notify_premium_expired",
+        "schedule": 120.0,
+        "args": (
+            10,
+        ),
+    },
 }

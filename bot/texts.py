@@ -156,3 +156,10 @@ PREMIUM_ALREADY_ACTIVATED_TEXT: Final[str] = (
     "✅ Premium is already activated."
 )
 
+PREMIUM_EXPIRED_MULTIPLE_SOURCES_TEXT: Final[str] = (
+    "⭐ <b>Premium expired</b>\n\n"
+    "Your Premium subscription has expired. Free plan allows only <b>1 source</b>.\n\n"
+    "To continue receiving news from multiple sources, please purchase Premium.\n\n"
+    "Choose an option below:"
+)
+

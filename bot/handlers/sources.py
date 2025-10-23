@@ -281,6 +281,25 @@ async def keep_one_source(cb: CallbackQuery):
 async def back_to_selection(cb: CallbackQuery):
     chat = cb.from_user.id
     sel = get_selection(chat)
+    if not sel:
+        db = get_sync_db()
+        try:
+            user = (
+                db.query(User)
+                .filter_by(
+                    telegram_id=str(cb.from_user.id),
+                )
+                .one_or_none()
+            )
+            if user:
+                active_subs = subscriptions_repo.list_active_by_user_id(
+                    user_id=user.id,
+                )
+                sel.clear()
+                for sub in active_subs:
+                    sel.add(sub.source_id)
+        finally:
+            db.close()
     context = get_source_selection_context(chat)
     kb = await build_sources_kb(
         selected=sel,

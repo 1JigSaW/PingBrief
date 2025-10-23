@@ -5,9 +5,11 @@ import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
+import logging
 
 from aiogram import Bot
 from aiogram.client.bot import DefaultBotProperties
+from sqlalchemy.orm import joinedload
 
 from app.db.session import SessionLocalSync
 from app.services.parsers.hackernews import HackerNewsParser
@@ -22,10 +24,17 @@ from app.db.models import (
     Digest,
     DigestStatus,
     NewsItemTranslation,
+    Source,
 )
+from app.repositories import users as users_repo
+from app.repositories import subscriptions as subscriptions_repo
+from bot.texts import PREMIUM_EXPIRED_MULTIPLE_SOURCES_TEXT
+from bot.keyboards.builders import build_paywall_keyboard_with_keep_options
 from app.services.i18n.translator import TranslatorService
 from app.config import get_settings
 from app.services.agents import SummarizerAgent, SummarizeInput
+
+PREMIUM_EXPIRED_NOTICE_URL = "premium://expired-notice"
 
 
 @celery_app.task(ignore_result=True)
@@ -123,6 +132,30 @@ def summarize_fresh_news(
     db = SessionLocalSync()
     try:
         agent = SummarizerAgent()
+        users_all: List[User] = (
+            db.query(User)
+            .filter(User.telegram_id.is_not(None))
+            .all()
+        )
+        eligible_source_ids: set = set()
+        for u in users_all:
+            subs_u: List[Subscription] = (
+                db.query(Subscription)
+                .filter(
+                    Subscription.user_id == u.id,
+                    Subscription.is_active.is_(True),
+                )
+                .all()
+            )
+            if not subs_u:
+                continue
+            is_eligible = users_repo.has_active_premium(
+                telegram_id=str(u.telegram_id),
+            ) or len(subs_u) <= 1
+            if not is_eligible:
+                continue
+            for s in subs_u:
+                eligible_source_ids.add(s.source_id)
         items = (
             db.query(NewsItem)
             .filter(NewsItem.summary.is_(None))
@@ -131,6 +164,8 @@ def summarize_fresh_news(
             .all()
         )
         for ni in items:
+            if ni.source_id not in eligible_source_ids:
+                continue
             if not ni.content or len(ni.content.strip()) < 40:
                 ni.summary = f"{ni.title}\n{ni.url}"
                 continue
@@ -163,15 +198,30 @@ def translate_needed_summaries(
             timeout_seconds=10,
             provider_name="libretranslate",
         )
-        active_subs = (
-            db.query(Subscription.source_id, Subscription.language)
-            .filter(Subscription.is_active.is_(True))
-            .distinct()
+        users_all: List[User] = (
+            db.query(User)
+            .filter(User.telegram_id.is_not(None))
             .all()
         )
         by_source_lang = {}
-        for src_id, lang in active_subs:
-            by_source_lang.setdefault(src_id, set()).add(lang)
+        for u in users_all:
+            subs_u: List[Subscription] = (
+                db.query(Subscription)
+                .filter(
+                    Subscription.user_id == u.id,
+                    Subscription.is_active.is_(True),
+                )
+                .all()
+            )
+            if not subs_u:
+                continue
+            is_eligible = users_repo.has_active_premium(
+                telegram_id=str(u.telegram_id),
+            ) or len(subs_u) <= 1
+            if not is_eligible:
+                continue
+            for s in subs_u:
+                by_source_lang.setdefault(s.source_id, set()).add(s.language)
 
         items = (
             db.query(NewsItem)
@@ -192,6 +242,109 @@ def translate_needed_summaries(
     finally:
         db.close()
 
+
+@celery_app.task(ignore_result=True)
+def notify_premium_expired(
+    lookback_minutes: int = 1440,
+) -> None:
+    settings = get_settings()
+    db = SessionLocalSync()
+    try:
+        now = datetime.utcnow()
+        window_start = now - timedelta(minutes=lookback_minutes)
+        users = (
+            db.query(User)
+            .filter(
+                User.telegram_id.is_not(None),
+                User.premium_until.is_not(None),
+                User.premium_until <= now,
+                User.premium_until > window_start,
+            )
+            .all()
+        )
+        if not users:
+            return
+        bot = Bot(
+            token=settings.telegram_bot_token,
+            default=DefaultBotProperties(
+                parse_mode="HTML",
+            ),
+        )
+        try:
+            for u in users:
+                active_subs = (
+                    db.query(Subscription)
+                    .filter(
+                        Subscription.user_id == u.id,
+                        Subscription.is_active.is_(True),
+                    )
+                    .all()
+                )
+                if len(active_subs) <= 1:
+                    continue
+                already = (
+                    db.query(Digest)
+                    .filter(
+                        Digest.user_id == u.id,
+                        Digest.url == PREMIUM_EXPIRED_NOTICE_URL,
+                        Digest.status == DigestStatus.SENT,
+                        Digest.sent_at >= window_start,
+                    )
+                    .first()
+                )
+                if already:
+                    continue
+                # Build keyboard options by names
+                source_ids = [sub.source_id for sub in active_subs]
+                srcs = (
+                    db.query(Source)
+                    .filter(Source.id.in_(source_ids))
+                    .all()
+                )
+                options = [
+                    (s.name, str(s.id))
+                    for s in srcs
+                ]
+                kb = build_paywall_keyboard_with_keep_options(
+                    options=options,
+                )
+                async def _send_once():
+                    await bot.send_message(
+                        chat_id=int(u.telegram_id) if u.telegram_id.isdigit() else u.telegram_id,
+                        text=PREMIUM_EXPIRED_MULTIPLE_SOURCES_TEXT,
+                        disable_notification=False,
+                        disable_web_page_preview=True,
+                        reply_markup=kb.as_markup(),
+                    )
+                try:
+                    asyncio.run(_send_once())
+                    db.add(
+                        Digest(
+                            user_id=u.id,
+                            subscription_id=active_subs[0].id,
+                            title="Premium expired",
+                            summary="",
+                            url=PREMIUM_EXPIRED_NOTICE_URL,
+                            scheduled_for=now,
+                            sent_at=now,
+                            status=DigestStatus.SENT,
+                        )
+                    )
+                    db.commit()
+                except Exception as e:
+                    logging.getLogger(__name__).exception(
+                        "notify_premium_expired_send_failed",
+                        extra={"user": u.telegram_id, "error": str(e)},
+                    )
+        finally:
+            async def _close():
+                await bot.session.close()
+            try:
+                asyncio.run(_close())
+            except Exception:
+                pass
+    finally:
+        db.close()
 
 @celery_app.task(ignore_result=True)
 def dispatch_news_updates(
@@ -219,6 +372,15 @@ def dispatch_news_updates(
             )
             .all()
         )
+        # Load subscriptions for each user
+        for user in users:
+            user.subscriptions = (
+                db.query(Subscription)
+                .filter(
+                    Subscription.user_id == user.id,
+                )
+                .all()
+            )
 
         user_id_to_active_subs: Dict[str, List[Subscription]] = {}
         for u in users:
@@ -232,6 +394,7 @@ def dispatch_news_updates(
 
         async def _send_batch(
             sends: List[Tuple[str, str, bool]],
+            keyboard = None,
         ) -> None:
             bot = Bot(
                 token=settings.telegram_bot_token,
@@ -241,12 +404,23 @@ def dispatch_news_updates(
             )
             try:
                 for chat_id, text, silent in sends:
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=text,
-                        disable_notification=silent,
-                        disable_web_page_preview=True,
-                    )
+                    chat_id_val = int(chat_id) if isinstance(chat_id, str) and chat_id.isdigit() else chat_id
+                    try:
+                        await bot.send_message(
+                            chat_id=chat_id_val,
+                            text=text,
+                            disable_notification=silent,
+                            disable_web_page_preview=True,
+                            reply_markup=keyboard.as_markup() if keyboard else None,
+                        )
+                    except Exception as e:
+                        logging.getLogger(__name__).exception(
+                            "send_message_failed",
+                            extra={
+                                "chat_id": chat_id,
+                                "error": str(e),
+                            },
+                        )
                     await asyncio.sleep(
                         0.25,
                     )
@@ -261,6 +435,63 @@ def dispatch_news_updates(
                 telegram_id,
                 0,
             )
+            
+            # Check premium status if user has multiple active sources
+            if len(subs) > 1 and not users_repo.has_active_premium(
+                telegram_id=telegram_id,
+            ):
+                # Premium expired - ensure we only notify ONCE per expiry window
+                already_notified = (
+                    db.query(Digest)
+                    .filter(
+                        Digest.user_id == (
+                            db.query(User.id).filter(User.telegram_id == telegram_id).scalar_subquery()
+                        ),
+                        Digest.url == PREMIUM_EXPIRED_NOTICE_URL,
+                        Digest.status == DigestStatus.SENT,
+                        Digest.sent_at >= cutoff_min_ts,
+                    )
+                    .first()
+                )
+                if not already_notified:
+                    # Build keyboard options from active subs
+                    active_sources = [
+                        (str(s.source_id), str(s.source_id))
+                        for s in subs
+                    ]
+                    kb = build_paywall_keyboard_with_keep_options(
+                        options=[
+                            (str(s.source_id), str(s.source_id))
+                            for s in subs
+                        ],
+                    )
+                    asyncio.run(
+                        _send_batch(
+                            sends=[(telegram_id, PREMIUM_EXPIRED_MULTIPLE_SOURCES_TEXT, False)],
+                            keyboard=kb,
+                        ),
+                    )
+                    # Record notification digest
+                    user_id_val = (
+                        db.query(User.id).filter(User.telegram_id == telegram_id).scalar()
+                    )
+                    if user_id_val:
+                        db.add(
+                            Digest(
+                                user_id=user_id_val,
+                                subscription_id=subs[0].id,
+                                title="Premium expired",
+                                summary="",
+                                url=PREMIUM_EXPIRED_NOTICE_URL,
+                                scheduled_for=datetime.utcnow(),
+                                sent_at=datetime.utcnow(),
+                                status=DigestStatus.SENT,
+                            )
+                        )
+                        db.commit()
+                # Skip sending news until user chooses an option
+                continue
+            
             for sub in subs:
                 if chat_budget >= max_messages_per_chat_per_run:
                     break
@@ -571,15 +802,21 @@ def _extract_domain(
     url: str,
 ) -> str:
     try:
-        parsed = urlparse(url or "")
+        if not url:
+            return "link"
+        
+        normalized = _normalize_url(
+            url=url,
+        )
+        parsed = urlparse(normalized)
         host = parsed.netloc
-        if not host and url:
-            reparsed = urlparse(f"http://{url}")
-            host = reparsed.netloc
+        
         if not host:
-            host = "link"
+            return "link"
+            
         if host.startswith("www."):
             host = host[4:]
+            
         return host
     except Exception:
         return "link"

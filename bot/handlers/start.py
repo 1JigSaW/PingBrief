@@ -14,6 +14,7 @@ from bot.keyboards.builders import (
     build_command_shortcuts_keyboard,
     build_settings_keyboard,
     build_go_start_keyboard,
+    build_paywall_keyboard_with_keep_options,
 )
 from bot.texts import (
     WELCOME_NEW_USER_TEXT,
@@ -22,6 +23,7 @@ from bot.texts import (
     NO_SUBSCRIPTIONS_TEXT,
     NO_ACTIVE_SUBSCRIPTIONS_TEXT,
     SETTINGS_HEADER_TEXT,
+    PREMIUM_EXPIRED_MULTIPLE_SOURCES_TEXT,
     CHANGE_SOURCES_HEADER_TEXT,
     CHANGE_LANGUAGE_HEADER_TEXT,
 )
@@ -37,6 +39,33 @@ async def cmd_start(message: Message):
         first_name=message.from_user.first_name,
         last_name=message.from_user.last_name,
     )
+
+    # If premium expired and user has >1 active source, show paywall popup once per interaction
+    has_premium = users_repo.has_active_premium(
+        telegram_id=str(message.from_user.id),
+    )
+    if not has_premium:
+        active_subs_check = subscriptions_repo.list_active_by_user_id(
+            user_id=user.id,
+        )
+        if len(active_subs_check) > 1:
+            # Build options with human names
+            source_ids = [sub.source_id for sub in active_subs_check]
+            srcs = sources_repo.get_sources_by_ids(
+                source_ids=source_ids,
+            )
+            options = [
+                (s.name, str(s.id))
+                for s in srcs
+            ]
+            kb_pay = build_paywall_keyboard_with_keep_options(
+                options=options,
+            )
+            await message.answer(
+                text=PREMIUM_EXPIRED_MULTIPLE_SOURCES_TEXT,
+                reply_markup=kb_pay.as_markup(),
+            )
+            return
 
     # Read active subscriptions and render welcome
     active_subs = subscriptions_repo.list_active_by_user_id(
