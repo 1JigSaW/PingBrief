@@ -816,7 +816,10 @@ def _extract_domain(
             
         if host.startswith("www."):
             host = host[4:]
-            
+        
+        if not _is_valid_host(host):
+            return "link"
+
         return host
     except Exception:
         return "link"
@@ -831,4 +834,47 @@ def _normalize_url(
     if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", val):
         return val
     return f"https://{val}"
+
+
+def _is_valid_host(
+    host: str,
+) -> bool:
+    try:
+        h = (host or "").strip()
+        if not h:
+            return False
+
+        if h == "localhost":
+            return True
+
+        # IPv6 in brackets
+        if h.startswith("[") and h.endswith("]"):
+            inner = h[1:-1]
+            return True if re.fullmatch(r"[0-9a-fA-F:]+", inner or "") else False
+
+        # IPv4 address
+        if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", h or ""):
+            parts = [int(p) for p in h.split(".")]
+            return all(0 <= p <= 255 for p in parts)
+
+        # Domain name must contain a dot and valid labels
+        if "." not in h:
+            return False
+
+        labels = h.split(".")
+        # TLD should be last label and at least 2 letters
+        tld = labels[-1]
+        if not re.fullmatch(r"[a-zA-Z]{2,}", tld):
+            return False
+
+        label_re = re.compile(r"^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$")
+        for label in labels:
+            if not label or len(label) > 63:
+                return False
+            if not label_re.fullmatch(label):
+                return False
+
+        return True
+    except Exception:
+        return False
 
